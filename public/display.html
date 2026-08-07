@@ -64,6 +64,32 @@
   .help-tag{ color:var(--red); font-weight:800; font-size:13px; }
   .empty-hint{ font-size:16px; color:var(--ink-soft); padding:6px 0; }
   .empty-state{ text-align:center; padding:100px 20px; color:var(--ink-soft); font-size:22px; }
+
+  .task-row{ cursor:pointer; }
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.7); display:flex; align-items:center; justify-content:center; padding:24px; z-index:50; }
+  .hidden{ display:none !important; }
+  .modal{
+    position:relative; background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg);
+    padding:28px 30px; width:100%; max-width:560px; max-height:85vh; overflow-y:auto;
+  }
+  .modal .close-x{
+    position:absolute; top:16px; right:16px; background:transparent; border:none; color:var(--ink-soft);
+    font-size:26px; padding:4px 10px; cursor:pointer;
+  }
+  .modal-station{ font-size:14px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
+  .modal-task{ font-size:24px; font-weight:800; margin:4px 0 2px; }
+  .modal-owner{ font-size:16px; color:var(--ink-soft); }
+  .modal-kit{ font-size:14px; color:var(--green); font-weight:700; margin-top:6px; }
+  .modal-times{ display:flex; gap:24px; margin:16px 0; }
+  .modal-times .timer-label{ font-size:11px; }
+  .modal-times .timer{ font-size:24px; margin-top:2px; }
+  .modal-log-title{ font-size:14px; font-weight:700; margin:18px 0 8px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; }
+  .modal-log{ border:1px solid var(--border); border-radius:14px; max-height:280px; overflow-y:auto; }
+  .modal-log .entry{ padding:12px 14px; border-bottom:1px solid var(--border); font-size:14px; }
+  .modal-log .entry:last-child{ border-bottom:none; }
+  .modal-log .entry .meta{ color:var(--ink-soft); font-size:11px; margin-top:4px; text-transform:uppercase; letter-spacing:.02em; font-weight:600; }
+  .modal-log .entry a{ color:var(--green); }
+  .modal-log .empty{ padding:20px; text-align:center; color:var(--ink-soft); font-size:14px; }
 </style>
 </head>
 <body>
@@ -77,6 +103,13 @@
 </header>
 
 <div class="grid" id="grid"></div>
+
+<div class="overlay hidden" id="taskDetailOverlay">
+  <div class="modal">
+    <button class="close-x" id="closeDetailBtn">&times;</button>
+    <div id="taskDetailBody"></div>
+  </div>
+</div>
 
 <script>
 const API = '/.netlify/functions/stations';
@@ -107,6 +140,8 @@ async function refresh() {
   } catch (e) { console.error('refresh failed', e); }
 }
 
+let openTaskId = null;
+
 function render() {
   const grid = document.getElementById('grid');
   if (!state.stations.length) {
@@ -114,6 +149,10 @@ function render() {
     return;
   }
   grid.innerHTML = state.stations.map(stationHtml).join('');
+  grid.querySelectorAll('[data-task-id]').forEach(el => {
+    el.addEventListener('click', () => openTaskDetail(el.dataset.taskId));
+  });
+  if (openTaskId) renderTaskDetail(); // keep the open modal's live timer/log in sync with each refresh
 }
 
 function stationHtml(s) {
@@ -134,7 +173,7 @@ function taskRowHtml(t) {
   const timerLabel = t.status === 'review' ? 'Review time' : 'Task time';
   const classes = ['task-row', 'status-' + t.status, t.helpFlag ? 'help-flag' : ''].join(' ');
   return `
-  <div class="${classes}">
+  <div class="${classes}" data-task-id="${t.id}">
     <div class="task-row-top">
       <div>
         <div class="owner-name">${esc(t.ownerName)}</div>
@@ -147,6 +186,68 @@ function taskRowHtml(t) {
     <div class="timer mono">${fmtDuration(timerMs)}</div>
   </div>`;
 }
+
+// --- Read-only task quick-view modal ---
+function updateEntryHtml(u) {
+  const att = u.attachment
+    ? `<div><a href="/.netlify/functions/attachments?key=${encodeURIComponent(u.attachment.key)}" target="_blank" rel="noopener">📎 ${esc(u.attachment.filename)}</a></div>`
+    : '';
+  return `
+    <div class="entry">
+      <div>${esc(u.note)}</div>
+      ${att}
+      <div class="meta">${new Date(u.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${esc(u.status)}</div>
+    </div>`;
+}
+
+function openTaskDetail(taskId) {
+  openTaskId = taskId;
+  renderTaskDetail();
+  document.getElementById('taskDetailOverlay').classList.remove('hidden');
+}
+
+function closeTaskDetail() {
+  openTaskId = null;
+  document.getElementById('taskDetailOverlay').classList.add('hidden');
+}
+
+function renderTaskDetail() {
+  const t = state.tasks.find(t => t.id === openTaskId);
+  const body = document.getElementById('taskDetailBody');
+  if (!t) {
+    // The task was completed/released/approved while this was open.
+    body.innerHTML = '<div class="empty-state" style="padding:20px;">This task is no longer active.</div>';
+    return;
+  }
+  const s = state.stations.find(s => s.id === t.stationId);
+  const timerMs = t.status === 'review' ? t.reviewElapsedMs : t.taskElapsedMs;
+  const timerLabel = t.status === 'review' ? 'Review time' : 'Task time';
+  body.innerHTML = `
+    <div class="modal-station">${esc(s ? s.name : t.stationId)}</div>
+    <div class="modal-task">${esc(t.taskLabel)}</div>
+    <div class="modal-owner">${esc(t.ownerName)}</div>
+    ${t.kit ? `<div class="modal-kit">Kit: ${esc(t.kit)}</div>` : ''}
+    <div class="modal-times">
+      <div>
+        <div class="timer-label">${timerLabel}</div>
+        <div class="timer mono">${fmtDuration(timerMs)}</div>
+      </div>
+      <div>
+        <div class="timer-label">Status</div>
+        <div class="status-badge ${t.status}" style="margin-top:4px;">${t.status.replace('-', ' ')}</div>
+      </div>
+    </div>
+    <div class="modal-log-title">Notes &amp; files</div>
+    <div class="modal-log">
+      ${t.updates.length ? t.updates.slice().reverse().map(updateEntryHtml).join('') : '<div class="empty">No updates yet.</div>'}
+    </div>`;
+}
+
+document.getElementById('closeDetailBtn').addEventListener('click', closeTaskDetail);
+document.getElementById('taskDetailOverlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) closeTaskDetail();
+});
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeTaskDetail(); });
 
 function tickClock() {
   document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit', second: '2-digit' });
