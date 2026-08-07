@@ -6,6 +6,22 @@ import { withErrorBoundary } from "./lib/http.mjs";
 // rejecting the whole request.
 const MAX_BYTES = 8 * 1024 * 1024;
 
+// Header values have to be Latin-1 (Node's Headers implementation throws
+// "Cannot convert argument to a ByteString" otherwise) - real-world
+// filenames routinely aren't. macOS screenshot names in particular embed
+// U+202F (narrow no-break space) before "AM"/"PM", which is exactly what
+// broke this: any filename with an em dash, curly quote, emoji, or other
+// non-Latin1 character would 500 the same way. Building a plain-ASCII
+// fallback for the legacy `filename=` param, plus a properly percent-
+// encoded `filename*=UTF-8''...` (RFC 5987) for browsers that use it,
+// gets a correct download name either way without ever touching a
+// non-Latin1 byte in the raw header value.
+function contentDispositionHeader(filename) {
+  const safe = (filename || "file").replace(/["\r\n]/g, "").replace(/[^\x20-\x7e]/g, "_");
+  const encoded = encodeURIComponent(filename || "file");
+  return `attachment; filename="${safe}"; filename*=UTF-8''${encoded}`;
+}
+
 export default withErrorBoundary(async (req) => {
   const url = new URL(req.url);
   const store = attachmentsStore();
@@ -20,7 +36,7 @@ export default withErrorBoundary(async (req) => {
       status: 200,
       headers: {
         "content-type": meta.mimeType || "application/octet-stream",
-        "content-disposition": `inline; filename="${(meta.filename || "file").replace(/"/g, "")}"`,
+        "content-disposition": contentDispositionHeader(meta.filename),
         "cache-control": "private, max-age=31536000, immutable",
       },
     });
