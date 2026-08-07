@@ -148,10 +148,44 @@ export default withErrorBoundary(async (req) => {
       return json({ stations: stations.map(withDerived) });
     }
 
+    // Sends a task in review back to in-progress with a note explaining
+    // why - the lab lead's reject path. Resumes the task timer from where
+    // it left off (rather than restarting at zero) by backdating
+    // taskStartedAt by whatever task time had already accumulated.
+    if (action === "rejectReview") {
+      if (!isAdmin(body)) return json({ error: "lab lead passcode required" }, 401);
+      const note = (body.note || "").trim();
+      if (!note) return json({ error: "a note is required to send this back" }, 400);
+
+      const stations = await mutateStations((stations) => {
+        const idx = stations.findIndex((s) => s.id === body.stationId);
+        if (idx === -1) throw new ApiError("station not found", 404);
+        const station = stations[idx];
+        if (station.status !== "review") throw new ApiError("station is not in review", 400);
+        const now = new Date();
+        const alreadyElapsed = station.taskDurationMs || 0;
+        const next = [...stations];
+        next[idx] = {
+          ...station,
+          status: "in-progress",
+          taskStartedAt: new Date(now.getTime() - alreadyElapsed).toISOString(),
+          taskDurationMs: null,
+          reviewStartedAt: null,
+          updates: [...station.updates, { ts: now.toISOString(), note, status: "sent back" }],
+          updatedAt: now.toISOString(),
+        };
+        return next;
+      });
+      return json({ stations: stations.map(withDerived) });
+    }
+
     // Stops the review timer, requires a closing note, logs the full
     // record (task time, review time, every update) to history, and
-    // resets the station back to idle.
+    // resets the station back to idle. Lab-lead-only - this is the
+    // approval step, not something the person who did the work signs off
+    // on themselves.
     if (action === "completeTask") {
+      if (!isAdmin(body)) return json({ error: "lab lead passcode required to approve and complete this task" }, 401);
       const note = (body.note || "").trim();
       if (!note) return json({ error: "a closing note is required to complete this task" }, 400);
 
@@ -193,6 +227,35 @@ export default withErrorBoundary(async (req) => {
         if (idx === -1) throw new ApiError("station not found", 404);
         const next = [...stations];
         next[idx] = resetToIdle(stations[idx]);
+        return next;
+      });
+      return json({ stations: stations.map(withDerived) });
+    }
+
+    // Attaches an already-uploaded file (see attachments.mjs, which returns
+    // {key, filename, mimeType, size}) to the update log as its own entry -
+    // separate from addUpdate so a screenshot/file can be dropped in
+    // without also having to write a periodic status note.
+    if (action === "addAttachment") {
+      const { key, filename, mimeType, size } = body.attachment || {};
+      if (!key || !filename) return json({ error: "attachment upload failed" }, 400);
+      const note = (body.note || "").trim();
+
+      const stations = await mutateStations((stations) => {
+        const idx = stations.findIndex((s) => s.id === body.stationId);
+        if (idx === -1) throw new ApiError("station not found", 404);
+        const station = stations[idx];
+        if (station.status === "idle") throw new ApiError("station is not an active task", 400);
+        const now = new Date().toISOString();
+        const next = [...stations];
+        next[idx] = {
+          ...station,
+          updates: [
+            ...station.updates,
+            { ts: now, note: note || `Attached ${filename}`, status: station.status, attachment: { key, filename, mimeType, size } },
+          ],
+          updatedAt: now,
+        };
         return next;
       });
       return json({ stations: stations.map(withDerived) });

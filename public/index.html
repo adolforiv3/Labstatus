@@ -184,7 +184,7 @@
   </div>
   <div class="header-actions">
     <span class="clock mono" id="clock"></span>
-    <button class="ghost small" id="adminBtn">Admin</button>
+    <button class="ghost small" id="adminBtn">Lab Lead</button>
   </div>
 </header>
 
@@ -240,6 +240,11 @@
     <p class="sub" id="taskSub"></p>
     <div class="updates-log" id="updatesLog"></div>
     <div class="field">
+      <label>Attach a file (screenshot, .txt, etc. - 8MB max)</label>
+      <input type="file" id="attachmentInput">
+    </div>
+    <div class="error-msg" id="attachmentError"></div>
+    <div class="field">
       <label id="noteLabel">Update note (required)</label>
       <textarea id="noteInput" rows="3"></textarea>
     </div>
@@ -254,7 +259,26 @@
     </div>
     <div class="modal-actions hidden" id="taskActionsReview">
       <button class="ghost" id="releaseTaskBtn2">Release (abandon)</button>
-      <button class="primary" id="completeTaskBtn">Complete task</button>
+      <button class="danger" id="rejectReviewBtn">Send back</button>
+      <button class="primary" id="completeTaskBtn">Approve &amp; complete</button>
+    </div>
+  </div>
+</div>
+
+<!-- Lab lead passcode modal (blocks completing/rejecting a review) -->
+<div class="overlay hidden" id="leadOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="leadOverlay">&times;</button>
+    <h2>Lab lead passcode</h2>
+    <p class="sub">Approving, rejecting, or force-releasing a task requires the lab lead passcode.</p>
+    <div class="field">
+      <label>Passcode</label>
+      <input type="password" id="leadPasscodeInput" autocomplete="off">
+    </div>
+    <div class="error-msg" id="leadError"></div>
+    <div class="modal-actions">
+      <button class="ghost" data-close="leadOverlay">Cancel</button>
+      <button class="primary" id="leadSubmit">Unlock</button>
     </div>
   </div>
 </div>
@@ -263,11 +287,11 @@
 <div class="overlay hidden" id="adminOverlay">
   <div class="modal">
     <button class="close-x" data-close="adminOverlay">&times;</button>
-    <h2>Admin</h2>
+    <h2>Lab Lead / Admin</h2>
     <div id="adminGate">
-      <p class="sub">Enter the board admin passcode.</p>
+      <p class="sub">Enter the lab lead passcode.</p>
       <div class="field">
-        <label>Admin passcode</label>
+        <label>Passcode</label>
         <input type="password" id="adminPasscodeInput" autocomplete="off">
       </div>
       <div class="error-msg" id="adminError"></div>
@@ -501,13 +525,7 @@ function openTask(stationId) {
   document.getElementById('taskError').textContent = '';
 
   const log = document.getElementById('updatesLog');
-  log.innerHTML = s.updates.length
-    ? s.updates.slice().reverse().map(u => `
-        <div class="entry">
-          <div>${esc(u.note)}</div>
-          <div class="meta">${new Date(u.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${u.status}</div>
-        </div>`).join('')
-    : '<div class="empty">No updates yet.</div>';
+  log.innerHTML = s.updates.length ? s.updates.slice().reverse().map(updateEntryHtml).join('') : '<div class="empty">No updates yet.</div>';
 
   const inReview = s.status === 'review';
   document.getElementById('taskActionsRow1').classList.toggle('hidden', inReview);
@@ -515,8 +533,56 @@ function openTask(stationId) {
   document.getElementById('taskActionsReview').classList.toggle('hidden', !inReview);
   document.getElementById('noteLabel').textContent = inReview ? 'Closing note (required)' : 'Update note (required)';
   document.getElementById('markBlockedBtn').textContent = s.status === 'blocked' ? 'Mark in progress' : 'Mark blocked';
+  document.getElementById('attachmentInput').value = '';
+  document.getElementById('attachmentError').textContent = '';
   show('taskOverlay');
 }
+
+function updateEntryHtml(u) {
+  const att = u.attachment
+    ? `<div><a href="/.netlify/functions/attachments?key=${encodeURIComponent(u.attachment.key)}" target="_blank" rel="noopener">📎 ${esc(u.attachment.filename)}</a></div>`
+    : '';
+  return `
+    <div class="entry">
+      <div>${esc(u.note)}</div>
+      ${att}
+      <div class="meta">${new Date(u.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${u.status}</div>
+    </div>`;
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+document.getElementById('attachmentInput').addEventListener('change', async (e) => {
+  const file = e.target.files[0];
+  if (!file) return;
+  const err = document.getElementById('attachmentError');
+  err.textContent = '';
+  if (file.size > 8 * 1024 * 1024) { err.textContent = 'file too large (8MB max)'; e.target.value = ''; return; }
+  try {
+    const dataBase64 = await fileToBase64(file);
+    const uploadRes = await fetch('/.netlify/functions/attachments', {
+      method: 'POST',
+      headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, mimeType: file.type || 'application/octet-stream', dataBase64 }),
+    });
+    const uploaded = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok) throw new Error(uploaded.error || 'upload failed');
+    await api('addAttachment', { stationId: taskStationId, attachment: uploaded });
+    e.target.value = '';
+    await refreshBoard();
+    openTask(taskStationId);
+  } catch (ex) {
+    err.textContent = ex.message;
+    e.target.value = '';
+  }
+});
 
 function currentNote() {
   return document.getElementById('noteInput').value.trim();
@@ -529,7 +595,8 @@ document.getElementById('markBlockedBtn').addEventListener('click', () => {
   submitTaskAction('addUpdate', { status: nextStatus });
 });
 document.getElementById('sendReviewBtn').addEventListener('click', () => submitTaskAction('sendToReview'));
-document.getElementById('completeTaskBtn').addEventListener('click', () => submitTaskAction('completeTask'));
+document.getElementById('completeTaskBtn').addEventListener('click', () => requireLead(() => submitTaskAction('completeTask', { adminToken: adminToken() })));
+document.getElementById('rejectReviewBtn').addEventListener('click', () => requireLead(() => submitTaskAction('rejectReview', { adminToken: adminToken() })));
 document.getElementById('releaseTaskBtn').addEventListener('click', releaseTask);
 document.getElementById('releaseTaskBtn2').addEventListener('click', releaseTask);
 
@@ -544,6 +611,31 @@ async function submitTaskAction(action, extra) {
     await refreshBoard();
   } catch (e) { err.textContent = e.message; }
 }
+
+// --- Lab lead gate (approve/reject/force-release) ---
+let pendingLeadAction = null;
+function requireLead(action) {
+  if (adminToken()) { action(); return; }
+  pendingLeadAction = action;
+  document.getElementById('leadPasscodeInput').value = '';
+  document.getElementById('leadError').textContent = '';
+  show('leadOverlay');
+  document.getElementById('leadPasscodeInput').focus();
+}
+document.getElementById('leadSubmit').addEventListener('click', async () => {
+  const passcode = document.getElementById('leadPasscodeInput').value;
+  const err = document.getElementById('leadError');
+  err.textContent = '';
+  try {
+    const data = await api('adminVerify', { passcode });
+    setAdminToken(data.token);
+    hide('leadOverlay');
+    if (pendingLeadAction) pendingLeadAction();
+  } catch (e) { err.textContent = e.message; }
+});
+document.getElementById('leadPasscodeInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('leadSubmit').click();
+});
 
 async function releaseTask() {
   if (!confirm('Abandon this task with no history record?')) return;
@@ -634,11 +726,7 @@ function openHistoryDetail(h) {
   document.getElementById('historyDetailSub').textContent =
     `${h.ownerName} · task ${fmtDuration(h.taskDurationMs)} · review ${fmtDuration(h.reviewDurationMs)} · completed ${new Date(h.completedAt).toLocaleString()}`;
   document.getElementById('historyDetailLog').innerHTML = h.updates.length
-    ? h.updates.map(u => `
-        <div class="entry">
-          <div>${esc(u.note)}</div>
-          <div class="meta">${new Date(u.ts).toLocaleString()} · ${u.status}</div>
-        </div>`).join('')
+    ? h.updates.map(updateEntryHtml).join('')
     : '<div class="empty">No update notes.</div>';
   show('historyDetailOverlay');
 }
