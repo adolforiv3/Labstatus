@@ -1,0 +1,388 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab Admin — Lab Status Board</title>
+<style>
+  :root{
+    --paper:#f5f5f7; --ink:#1d1d1f; --ink-soft:#6e6e73;
+    --teal:#5e5ce6; --teal-bg: rgba(94,92,230,0.1);
+    --amber:#ff9500; --amber-bg: rgba(255,149,0,0.12);
+    --red:#ff3b30; --red-bg: rgba(255,59,48,0.12);
+    --green:#34c759; --green-bg: rgba(52,199,89,0.12);
+    --gray-bg: rgba(0,0,0,0.045);
+    --card:#ffffff; --border: rgba(0,0,0,0.09);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 6px rgba(0,0,0,0.05);
+    --r-sm:10px; --r-md:14px; --r-lg:20px; --r-pill:999px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#000000; --ink:#f5f5f7; --ink-soft:#98989d;
+      --teal:#7d7aff; --teal-bg: rgba(125,122,255,0.18);
+      --amber:#ff9f0a; --amber-bg: rgba(255,159,10,0.16);
+      --red:#ff453a; --red-bg: rgba(255,69,58,0.16);
+      --green:#30d158; --green-bg: rgba(48,209,88,0.16);
+      --gray-bg: rgba(255,255,255,0.07);
+      --card:#1c1c1e; --border: rgba(255,255,255,0.12);
+      --shadow-sm: 0 0 0 1px rgba(255,255,255,0.06);
+    }
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--paper); color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased; padding-bottom:60px; }
+  .mono{ font-variant-numeric:tabular-nums; }
+  header.top{ display:flex; justify-content:space-between; align-items:center; gap:16px; padding:24px 24px 16px; max-width:900px; margin:0 auto; flex-wrap:wrap; }
+  .brand-eyebrow{ font-size:13px; letter-spacing:.02em; color:var(--teal); font-weight:600; }
+  .brand-title{ font-size:30px; font-weight:700; letter-spacing:-0.02em; margin-top:2px; }
+  .back-link{ font-size:14px; color:var(--ink-soft); text-decoration:none; }
+  main{ max-width:900px; margin:0 auto; padding:0 24px; }
+
+  button{
+    font-family:inherit; font-size:15px; font-weight:600; border:none; cursor:pointer;
+    border-radius:var(--r-sm); padding:10px 16px; background:var(--card); color:var(--ink); border:1px solid var(--border);
+  }
+  button:active{ transform:scale(0.97); }
+  button.primary{ background:var(--teal); color:#fff; border-color:transparent; }
+  button.danger{ background:var(--red); color:#fff; border-color:transparent; }
+  button.ghost{ background:transparent; border-color:var(--border); }
+  button.small{ padding:6px 11px; font-size:13px; }
+
+  .section{
+    background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow-sm);
+    padding:22px 24px; margin-bottom:20px;
+  }
+  .section h2{ font-size:18px; margin-bottom:4px; }
+  .section .sub{ font-size:14px; color:var(--ink-soft); margin-bottom:16px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:13px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
+  input[type=text], input[type=password], select, textarea{
+    width:100%; font-family:inherit; font-size:16px; background:var(--paper); border:1px solid var(--border);
+    padding:11px 14px; color:var(--ink); border-radius:var(--r-sm);
+  }
+  input:focus, select:focus, textarea:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 4px var(--teal-bg); }
+  .error-msg{ color:var(--red); font-size:13px; margin-top:8px; min-height:16px; }
+  hr.divider{ margin:20px 0; border:none; border-top:1px solid var(--border); }
+
+  .review-card{ border:1px solid var(--border); border-radius:var(--r-md); padding:16px 18px; margin-bottom:12px; box-shadow:0 0 0 2px var(--amber); }
+  .review-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
+  .review-station{ font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; font-weight:700; }
+  .review-task{ font-size:17px; font-weight:700; margin-top:2px; }
+  .review-owner{ font-size:14px; color:var(--ink-soft); }
+  .review-times{ display:flex; gap:16px; margin:10px 0; font-size:13px; color:var(--ink-soft); }
+  .review-times b{ color:var(--ink); font-variant-numeric:tabular-nums; }
+  .review-log{ border:1px solid var(--border); border-radius:var(--r-sm); max-height:140px; overflow-y:auto; margin:10px 0; }
+  .review-log .entry{ padding:8px 10px; border-bottom:1px solid var(--border); font-size:13px; }
+  .review-log .entry:last-child{ border-bottom:none; }
+  .review-log .entry .meta{ color:var(--ink-soft); font-size:11px; margin-top:2px; }
+  .review-actions{ display:flex; gap:8px; margin-top:10px; }
+  .review-actions button{ flex:1; }
+  .empty-hint{ color:var(--ink-soft); font-size:14px; }
+
+  .stat-grid{ display:grid; grid-template-columns:repeat(auto-fit, minmax(140px, 1fr)); gap:14px; }
+  .stat-tile{ background:var(--gray-bg); border-radius:var(--r-md); padding:14px 16px; }
+  .stat-value{ font-size:26px; font-weight:800; letter-spacing:-0.01em; }
+  .stat-label{ font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; font-weight:700; margin-top:2px; }
+
+  .gate{ max-width:400px; margin:60px auto; text-align:center; }
+  .gate .field{ text-align:left; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <div class="brand-eyebrow">LAB STATUS BOARD</div>
+    <div class="brand-title">Lab Admin</div>
+  </div>
+  <a class="back-link" href="/">&larr; Back to board</a>
+</header>
+
+<main>
+  <div id="gateView" class="gate">
+    <div class="section">
+      <h2>Lab admin passcode</h2>
+      <p class="sub">Enter the lab admin passcode to review pending tasks and manage stations.</p>
+      <div class="field">
+        <label>Passcode</label>
+        <input type="password" id="adminPasscodeInput" autocomplete="off">
+      </div>
+      <div class="error-msg" id="gateError"></div>
+      <button class="primary" id="adminSubmit" style="width:100%;">Unlock</button>
+    </div>
+  </div>
+
+  <div id="adminView" class="hidden">
+    <div class="section">
+      <h2>Metrics</h2>
+      <p class="sub">Live snapshot across every station.</p>
+      <div class="stat-grid" id="statGrid"></div>
+    </div>
+
+    <div class="section">
+      <h2>Pending reviews</h2>
+      <p class="sub">Every task currently waiting on lab admin approval, across all stations.</p>
+      <div id="reviewList"></div>
+    </div>
+
+    <div class="section">
+      <h2>Stations</h2>
+      <p class="sub">Add, rename, force-release, or delete a station.</p>
+      <div class="field">
+        <label>New station name</label>
+        <input type="text" id="adminNewStationName" placeholder="e.g. Desk Zone 3">
+      </div>
+      <div class="field">
+        <label>Zone</label>
+        <input type="text" id="adminNewStationZone" placeholder="e.g. desk">
+      </div>
+      <button class="primary small" id="adminAddStationBtn">Add station</button>
+
+      <hr class="divider">
+
+      <div class="field">
+        <label>Station</label>
+        <select id="adminStationSelect"></select>
+      </div>
+      <div class="field" style="margin-top:14px;">
+        <button class="danger small" id="adminForceReleaseBtn">Force release all tasks</button>
+      </div>
+      <div class="field">
+        <label>Rename this station</label>
+        <input type="text" id="adminStationRenameInput">
+      </div>
+      <button class="ghost small" id="adminRenameStationBtn">Rename station</button>
+      <button class="danger small" id="adminDeleteStationBtn" style="margin-top:10px;">Delete station</button>
+      <div class="error-msg" id="adminPanelError"></div>
+    </div>
+  </div>
+</main>
+
+<style>.hidden{ display:none !important; }</style>
+
+<script>
+const API = '/.netlify/functions/stations';
+let state = { stations: [], tasks: [] };
+let history = [];
+
+function adminToken() { return sessionStorage.getItem('adminToken'); }
+function setAdminToken(t) { sessionStorage.setItem('adminToken', t); }
+function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDuration(ms) {
+  if (ms == null) return '--:--';
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+async function api(action, extra) {
+  const res = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, ...extra }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+document.getElementById('adminSubmit').addEventListener('click', async () => {
+  const passcode = document.getElementById('adminPasscodeInput').value;
+  const err = document.getElementById('gateError');
+  err.textContent = '';
+  try {
+    const data = await api('adminVerify', { passcode });
+    setAdminToken(data.token);
+    enterAdminView();
+  } catch (e) { err.textContent = e.message; }
+});
+document.getElementById('adminPasscodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('adminSubmit').click(); });
+
+async function enterAdminView() {
+  document.getElementById('gateView').classList.add('hidden');
+  document.getElementById('adminView').classList.remove('hidden');
+  await refresh();
+  setInterval(refresh, 3000);
+}
+
+async function refresh() {
+  try {
+    const [boardRes, historyRes] = await Promise.all([
+      fetch(API + '?t=' + Date.now()),
+      fetch(API + '?history=1&t=' + Date.now()),
+    ]);
+    const boardData = await boardRes.json();
+    const historyData = await historyRes.json();
+    state.stations = boardData.stations;
+    state.tasks = boardData.tasks;
+    history = historyData.history;
+    render();
+  } catch (e) { console.error('refresh failed', e); }
+}
+
+function render() {
+  renderMetrics();
+  renderReviews();
+  const sel = document.getElementById('adminStationSelect');
+  const prev = sel.value;
+  sel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
+  syncStationRenameInput();
+}
+
+function avg(nums) {
+  const valid = nums.filter(n => n != null);
+  if (!valid.length) return null;
+  return valid.reduce((a, b) => a + b, 0) / valid.length;
+}
+
+function renderMetrics() {
+  const live = state.tasks;
+  const liveByStatus = { 'in-progress': 0, blocked: 0, review: 0 };
+  live.forEach(t => { liveByStatus[t.status] = (liveByStatus[t.status] || 0) + 1; });
+  const avgTaskMs = avg(history.map(h => h.taskDurationMs));
+  const avgReviewMs = avg(history.map(h => h.reviewDurationMs));
+
+  const tiles = [
+    { label: 'Live tasks', value: live.length },
+    { label: 'In progress', value: liveByStatus['in-progress'] },
+    { label: 'Blocked', value: liveByStatus.blocked },
+    { label: 'In review', value: liveByStatus.review },
+    { label: 'Completed tasks', value: history.length },
+    { label: 'Avg. task time', value: fmtDuration(avgTaskMs) },
+    { label: 'Avg. review time', value: fmtDuration(avgReviewMs) },
+  ];
+  document.getElementById('statGrid').innerHTML = tiles.map(t => `
+    <div class="stat-tile">
+      <div class="stat-value mono">${t.value}</div>
+      <div class="stat-label">${esc(t.label)}</div>
+    </div>`).join('');
+}
+
+function renderReviews() {
+  const list = document.getElementById('reviewList');
+  const reviews = state.tasks.filter(t => t.status === 'review');
+  if (!reviews.length) {
+    list.innerHTML = '<div class="empty-hint">Nothing waiting on review right now.</div>';
+    return;
+  }
+  list.innerHTML = reviews.map(reviewCardHtml).join('');
+  reviews.forEach(t => {
+    document.getElementById('approve-' + t.id).addEventListener('click', () => completeReview(t.id));
+    document.getElementById('reject-' + t.id).addEventListener('click', () => rejectReview(t.id));
+  });
+}
+
+function reviewCardHtml(t) {
+  const station = state.stations.find(s => s.id === t.stationId);
+  const log = t.updates.length
+    ? t.updates.slice().reverse().map(u => `<div class="entry"><div>${esc(u.note)}</div><div class="meta">${new Date(u.ts).toLocaleString([], {hour:'2-digit', minute:'2-digit'})} · ${esc(u.status)}</div></div>`).join('')
+    : '<div class="entry">No update notes.</div>';
+  return `
+  <div class="review-card">
+    <div class="review-top">
+      <div>
+        <div class="review-station">${esc(station ? station.name : t.stationId)}</div>
+        <div class="review-task">${esc(t.taskLabel)}</div>
+        <div class="review-owner">${esc(t.ownerName)}</div>
+      </div>
+    </div>
+    <div class="review-times">
+      <span>Task time: <b class="mono">${fmtDuration(t.taskDurationMs)}</b></span>
+      <span>In review: <b class="mono">${fmtDuration(t.reviewElapsedMs)}</b></span>
+    </div>
+    <div class="review-log">${log}</div>
+    <div class="field" style="margin-top:10px; margin-bottom:0;">
+      <label>Note (required to approve or send back)</label>
+      <textarea id="note-${t.id}" rows="2"></textarea>
+    </div>
+    <div class="error-msg" id="err-${t.id}"></div>
+    <div class="review-actions">
+      <button class="danger" id="reject-${t.id}">Send back</button>
+      <button class="primary" id="approve-${t.id}">Approve &amp; complete</button>
+    </div>
+  </div>`;
+}
+
+async function completeReview(taskId) {
+  const note = document.getElementById('note-' + taskId).value.trim();
+  const err = document.getElementById('err-' + taskId);
+  if (!note) { err.textContent = 'a closing note is required'; return; }
+  err.textContent = '';
+  try {
+    await api('completeTask', { taskId, note, adminToken: adminToken() });
+    await refresh();
+  } catch (e) { err.textContent = e.message; }
+}
+async function rejectReview(taskId) {
+  const note = document.getElementById('note-' + taskId).value.trim();
+  const err = document.getElementById('err-' + taskId);
+  if (!note) { err.textContent = 'a note is required to send this back'; return; }
+  err.textContent = '';
+  try {
+    await api('rejectReview', { taskId, note, adminToken: adminToken() });
+    await refresh();
+  } catch (e) { err.textContent = e.message; }
+}
+
+function syncStationRenameInput() {
+  const s = state.stations.find(s => s.id === document.getElementById('adminStationSelect').value);
+  document.getElementById('adminStationRenameInput').value = s ? s.name : '';
+}
+document.getElementById('adminStationSelect').addEventListener('change', syncStationRenameInput);
+
+document.getElementById('adminAddStationBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    await api('adminAddStation', {
+      adminToken: adminToken(),
+      name: document.getElementById('adminNewStationName').value,
+      zone: document.getElementById('adminNewStationZone').value,
+    });
+    document.getElementById('adminNewStationName').value = '';
+    document.getElementById('adminNewStationZone').value = '';
+    await refresh();
+  } catch (e) { err.textContent = e.message; }
+});
+
+document.getElementById('adminForceReleaseBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  const stationId = document.getElementById('adminStationSelect').value;
+  const stationTasks = state.tasks.filter(t => t.stationId === stationId);
+  if (!stationTasks.length) { err.textContent = 'no active tasks at this station'; return; }
+  try {
+    for (const t of stationTasks) {
+      await api('adminForceRelease', { adminToken: adminToken(), taskId: t.id });
+    }
+    await refresh();
+  } catch (e) { err.textContent = e.message; }
+});
+
+document.getElementById('adminRenameStationBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    await api('adminRenameStation', {
+      adminToken: adminToken(),
+      stationId: document.getElementById('adminStationSelect').value,
+      name: document.getElementById('adminStationRenameInput').value,
+    });
+    await refresh();
+  } catch (e) { err.textContent = e.message; }
+});
+
+document.getElementById('adminDeleteStationBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  const stationId = document.getElementById('adminStationSelect').value;
+  const s = state.stations.find(s => s.id === stationId);
+  if (!confirm(`Delete "${s ? s.name : stationId}"? This can't be undone.`)) return;
+  try {
+    await api('adminDeleteStation', { adminToken: adminToken(), stationId });
+    await refresh();
+  } catch (e) { err.textContent = e.message; }
+});
+
+if (adminToken()) enterAdminView();
+</script>
+</body>
+</html>

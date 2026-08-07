@@ -188,7 +188,7 @@
   <div class="header-actions">
     <span class="clock mono" id="clock"></span>
     <a class="btn ghost small" href="/display.html" target="_blank" rel="noopener">Display Mode</a>
-    <button class="ghost small" id="adminBtn">Lab Admin</button>
+    <a class="btn ghost small" href="/admin.html">Lab Admin</a>
   </div>
 </header>
 
@@ -236,55 +236,6 @@
   </div>
 </div>
 
-<!-- Admin modal -->
-<div class="overlay hidden" id="adminOverlay">
-  <div class="modal">
-    <button class="close-x" data-close="adminOverlay">&times;</button>
-    <h2>Lab Admin</h2>
-    <div id="adminGate">
-      <p class="sub">Enter the lab admin passcode.</p>
-      <div class="field">
-        <label>Passcode</label>
-        <input type="password" id="adminPasscodeInput" autocomplete="off">
-      </div>
-      <div class="error-msg" id="adminError"></div>
-      <div class="modal-actions">
-        <button class="ghost" data-close="adminOverlay">Cancel</button>
-        <button class="primary" id="adminSubmit">Unlock</button>
-      </div>
-    </div>
-    <div id="adminPanel" class="hidden">
-      <p class="sub">Add, rename, force-release, or delete a station.</p>
-      <div class="field">
-        <label>New station name</label>
-        <input type="text" id="adminNewStationName" placeholder="e.g. Desk Zone 3">
-      </div>
-      <div class="field">
-        <label>Zone</label>
-        <input type="text" id="adminNewStationZone" placeholder="e.g. desk">
-      </div>
-      <button class="primary small" id="adminAddStationBtn">Add station</button>
-
-      <hr class="divider">
-
-      <div class="field">
-        <label>Station</label>
-        <select id="adminStationSelect"></select>
-      </div>
-      <div class="modal-actions">
-        <button class="danger small" id="adminForceReleaseBtn">Force release all tasks</button>
-      </div>
-      <div class="field">
-        <label>Rename this station</label>
-        <input type="text" id="adminStationRenameInput">
-      </div>
-      <button class="ghost small" id="adminRenameStationBtn">Rename station</button>
-      <button class="danger small" id="adminDeleteStationBtn" style="margin-top:10px;">Delete station</button>
-      <div class="error-msg" id="adminPanelError"></div>
-    </div>
-  </div>
-</div>
-
 <!-- History detail modal -->
 <div class="overlay hidden" id="historyDetailOverlay">
   <div class="modal">
@@ -308,9 +259,6 @@ let activeTab = 'board';
 let claimingStationId = null;
 
 function zoneLabel(z) { return ZONE_LABELS[z] || z; }
-
-function adminToken() { return sessionStorage.getItem('adminToken'); }
-function setAdminToken(token) { sessionStorage.setItem('adminToken', token); }
 
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
@@ -514,96 +462,6 @@ function updateEntryHtml(u) {
       <div class="meta">${new Date(u.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${u.status}</div>
     </div>`;
 }
-
-// --- Admin ---
-document.getElementById('adminBtn').addEventListener('click', () => {
-  document.getElementById('adminError').textContent = '';
-  document.getElementById('adminPasscodeInput').value = '';
-  if (adminToken()) { openAdminPanel(); } else {
-    document.getElementById('adminGate').classList.remove('hidden');
-    document.getElementById('adminPanel').classList.add('hidden');
-  }
-  show('adminOverlay');
-});
-document.getElementById('adminSubmit').addEventListener('click', async () => {
-  const passcode = document.getElementById('adminPasscodeInput').value;
-  const err = document.getElementById('adminError');
-  err.textContent = '';
-  try {
-    const data = await api('adminVerify', { passcode });
-    setAdminToken(data.token);
-    openAdminPanel();
-  } catch (e) { err.textContent = e.message; }
-});
-function openAdminPanel() {
-  document.getElementById('adminGate').classList.add('hidden');
-  document.getElementById('adminPanel').classList.remove('hidden');
-  document.getElementById('adminNewStationName').value = '';
-  document.getElementById('adminNewStationZone').value = '';
-  const sel = document.getElementById('adminStationSelect');
-  sel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
-  syncStationRenameInput();
-}
-function syncStationRenameInput() {
-  const s = state.stations.find(s => s.id === document.getElementById('adminStationSelect').value);
-  document.getElementById('adminStationRenameInput').value = s ? s.name : '';
-}
-document.getElementById('adminStationSelect').addEventListener('change', syncStationRenameInput);
-
-document.getElementById('adminAddStationBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  try {
-    await api('adminAddStation', {
-      adminToken: adminToken(),
-      name: document.getElementById('adminNewStationName').value,
-      zone: document.getElementById('adminNewStationZone').value,
-    });
-    await refreshBoard();
-    openAdminPanel();
-  } catch (e) { err.textContent = e.message; }
-});
-
-document.getElementById('adminForceReleaseBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  const stationId = document.getElementById('adminStationSelect').value;
-  const stationTasks = state.tasks.filter(t => t.stationId === stationId);
-  if (!stationTasks.length) { err.textContent = 'no active tasks at this station'; return; }
-  try {
-    for (const t of stationTasks) {
-      await api('adminForceRelease', { adminToken: adminToken(), taskId: t.id });
-    }
-    await refreshBoard();
-  } catch (e) { err.textContent = e.message; }
-});
-
-document.getElementById('adminRenameStationBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  try {
-    await api('adminRenameStation', {
-      adminToken: adminToken(),
-      stationId: document.getElementById('adminStationSelect').value,
-      name: document.getElementById('adminStationRenameInput').value,
-    });
-    await refreshBoard();
-    openAdminPanel();
-  } catch (e) { err.textContent = e.message; }
-});
-
-document.getElementById('adminDeleteStationBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  const stationId = document.getElementById('adminStationSelect').value;
-  const s = state.stations.find(s => s.id === stationId);
-  if (!confirm(`Delete "${s ? s.name : stationId}"? This can't be undone.`)) return;
-  try {
-    await api('adminDeleteStation', { adminToken: adminToken(), stationId });
-    await refreshBoard();
-    openAdminPanel();
-  } catch (e) { err.textContent = e.message; }
-});
 
 // --- History ---
 function renderHistory() {
