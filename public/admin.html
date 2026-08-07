@@ -130,6 +130,7 @@
   .updates-log .entry .meta{ color:var(--ink-soft); font-size:11px; margin-top:4px; text-transform:uppercase; letter-spacing:.02em; font-weight:600; }
   .updates-log .empty{ padding:16px; text-align:center; color:var(--ink-soft); font-size:14px; }
   .hidden{ display:none !important; }
+  button.active{ background:var(--green-bg); color:var(--green); border-color:transparent; }
 </style>
 </head>
 <body>
@@ -168,6 +169,7 @@
       <div class="section">
         <h2>Metrics</h2>
         <p class="sub">Live snapshot across every station.</p>
+        <button class="ghost small" id="pushBtn" style="margin-bottom:16px;">🔔 Notify me of pending reviews</button>
         <div class="stat-grid" id="statGrid"></div>
       </div>
 
@@ -260,6 +262,7 @@
   </div>
 </div>
 
+<script src="/push-client.js"></script>
 <script>
 const API = '/.netlify/functions/stations';
 let state = { stations: [], tasks: [] };
@@ -313,6 +316,35 @@ async function enterAdminView() {
   document.getElementById('adminView').classList.remove('hidden');
   await refresh();
   setInterval(refresh, 3000);
+  setupPushButton();
+}
+
+async function setupPushButton() {
+  const btn = document.getElementById('pushBtn');
+  if (!btn) return;
+  if (typeof pushSupported === 'undefined' || !(await pushSupported())) {
+    btn.textContent = 'Push notifications not supported in this browser';
+    btn.disabled = true;
+    return;
+  }
+  const enabled = isPushEnabled('admin');
+  btn.classList.toggle('active', enabled);
+  btn.textContent = enabled ? '🔔 Notifications on for pending reviews' : '🔔 Notify me of pending reviews';
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      if (isPushEnabled('admin')) {
+        await disablePush('admin');
+      } else {
+        await enablePush('admin', { adminToken: adminToken() });
+      }
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+      setupPushButton();
+    }
+  };
 }
 
 // --- Tabs ---

@@ -21,6 +21,7 @@ import {
   checkUserPasscode,
 } from "./lib/auth.mjs";
 import { attachmentsStore } from "./lib/stores.mjs";
+import { notifyScope, removeScope } from "./lib/push.mjs";
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -164,6 +165,16 @@ export default withErrorBoundary(async (req) => {
         };
         return next;
       });
+      const submitted = tasks.find((t) => t.id === body.taskId);
+      if (submitted) {
+        const stations = await loadStations();
+        const station = stations.find((s) => s.id === submitted.stationId);
+        notifyScope("admin", {
+          title: "New task pending review",
+          body: `${station ? station.name : submitted.stationId}: ${submitted.taskLabel} (${submitted.ownerName})`,
+          url: "/admin.html",
+        }).catch(() => {});
+      }
       return json({ tasks: tasks.map(withDerived) });
     }
 
@@ -194,6 +205,11 @@ export default withErrorBoundary(async (req) => {
         };
         return next;
       });
+      notifyScope(body.taskId, {
+        title: "Sent back for more work",
+        body: note,
+        url: `/task.html?id=${encodeURIComponent(body.taskId)}`,
+      }).catch(() => {});
       return json({ tasks: tasks.map(withDerived) });
     }
 
@@ -233,6 +249,12 @@ export default withErrorBoundary(async (req) => {
         return tasks.filter((t) => t.id !== body.taskId);
       });
       await appendHistory(historyEntry);
+      notifyScope(body.taskId, {
+        title: "Task approved",
+        body: note,
+        url: "/",
+      }).catch(() => {});
+      removeScope(body.taskId);
       return json({ tasks: tasks.map(withDerived), completed: historyEntry });
     }
 
@@ -247,6 +269,7 @@ export default withErrorBoundary(async (req) => {
         if (!tasks.some((t) => t.id === body.taskId)) throw new ApiError("task not found", 404);
         return tasks.filter((t) => t.id !== body.taskId);
       });
+      removeScope(body.taskId);
       return json({ tasks: tasks.map(withDerived) });
     }
 
@@ -327,6 +350,7 @@ export default withErrorBoundary(async (req) => {
         if (!tasks.some((t) => t.id === body.taskId)) throw new ApiError("task not found", 404);
         return tasks.filter((t) => t.id !== body.taskId);
       });
+      removeScope(body.taskId);
       return json({ tasks: tasks.map(withDerived) });
     }
 

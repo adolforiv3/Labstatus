@@ -15,3 +15,12 @@ export function stationBoardStore() {
 export function attachmentsStore() {
   return getStore({ name: "lab-status-board-attachments", consistency: "strong" });
 }
+// Web Push subscriptions - one entry per device that's granted notification
+// permission, either scoped to "admin" (gets pinged whenever a task enters
+// review) or to a specific taskId (gets pinged whenever that task gets a
+// new update/reject/approve). Kept separate from the main board store since
+// it's a different shape of data with its own churn pattern (devices
+// subscribing/unsubscribing) unrelated to station/task state.
+export function pushSubscriptionsStore() {
+  return getStore({ name: "lab-status-board-push", consistency: "strong" });
+}

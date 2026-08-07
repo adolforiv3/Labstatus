@@ -130,6 +130,8 @@
 
   .empty-state{ text-align:center; padding:80px 20px; color:var(--ink-soft); font-size:16px; }
   .gate{ max-width:400px; margin:80px auto; padding:0 20px; }
+  .push-btn{ font-size:13px; padding:8px 12px; margin-top:14px; }
+  .push-btn.active{ background:var(--green-bg); color:var(--green); border-color:transparent; }
 </style>
 </head>
 <body>
@@ -169,6 +171,7 @@
   </div>
 </div>
 
+<script src="/push-client.js"></script>
 <script>
 const API = '/.netlify/functions/stations';
 const params = new URLSearchParams(location.search);
@@ -257,6 +260,7 @@ function render() {
         </div>
       </div>
       ${task.stale ? '<div class="stale-tag" style="margin-top:10px;">STALE - no update in 4+ hours</div>' : ''}
+      <button class="ghost push-btn" id="pushBtn">🔔 Notify me about updates to this task</button>
     </div>
 
     <div class="section">
@@ -313,6 +317,7 @@ function render() {
   document.getElementById('helpBtn').addEventListener('click', async () => {
     try { await api('toggleHelp', { taskId, userToken: userToken() }); await load(); } catch (e) { alert(e.message); }
   });
+  setupPushButton();
   document.getElementById('attachmentInput').addEventListener('change', onAttachmentChange);
   renderPendingFiles();
   document.getElementById('uploadFilesBtn').addEventListener('click', uploadPendingFiles);
@@ -466,6 +471,34 @@ async function deleteAttachment(key) {
     await api('deleteAttachment', { taskId, key, userToken: userToken() });
     await load();
   } catch (e) { alert(e.message); }
+}
+
+async function setupPushButton() {
+  const btn = document.getElementById('pushBtn');
+  if (!btn) return;
+  if (typeof pushSupported === 'undefined' || !(await pushSupported())) {
+    btn.textContent = 'Push notifications not supported in this browser';
+    btn.disabled = true;
+    return;
+  }
+  const enabled = isPushEnabled(taskId);
+  btn.classList.toggle('active', enabled);
+  btn.textContent = enabled ? '🔔 Notifications on for this task' : '🔔 Notify me about updates to this task';
+  btn.onclick = async () => {
+    btn.disabled = true;
+    try {
+      if (isPushEnabled(taskId)) {
+        await disablePush(taskId);
+      } else {
+        await enablePush(taskId, { userToken: userToken() });
+      }
+    } catch (e) {
+      alert(e.message);
+    } finally {
+      btn.disabled = false;
+      setupPushButton();
+    }
+  };
 }
 
 let pendingLeadAction = null;
