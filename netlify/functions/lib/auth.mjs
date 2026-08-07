@@ -6,6 +6,12 @@ import { createHmac, timingSafeEqual, randomBytes } from "node:crypto";
 // name), so this is the one piece of access control that still exists.
 const TOKEN_SECRET = process.env.STATION_TOKEN_SECRET || "lab-status-board-dev-secret-change-me";
 const BOARD_ADMIN_PASSCODE = process.env.STATION_ADMIN_PASSCODE || "boardadmin";
+// Shared passcode gating basic task-view access (claim/update/etc) - not
+// per-person, just a bar against anyone outside the team getting into the
+// board's task pages at all. Deliberately separate from the admin
+// passcode: a regular team member unlocking task view should never also
+// unlock admin actions.
+const USER_PASSCODE = process.env.STATION_USER_PASSCODE || "labuser";
 const TOKEN_TTL_MS = 12 * 60 * 60 * 1000; // 12 hours, matches a shift + margin
 
 function b64url(buf) {
@@ -49,4 +55,17 @@ export function resolveAdminToken(token) {
 
 export function checkBoardAdminPasscode(passcode) {
   return !!passcode && passcode === BOARD_ADMIN_PASSCODE;
+}
+
+export function newUserToken() {
+  return signToken({ user: true, exp: Date.now() + TOKEN_TTL_MS, n: randomBytes(4).toString("hex") });
+}
+
+export function resolveUserToken(token) {
+  const payload = verifyToken(token);
+  return !!(payload && payload.user === true);
+}
+
+export function checkUserPasscode(passcode) {
+  return !!passcode && passcode === USER_PASSCODE;
 }

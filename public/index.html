@@ -241,6 +241,24 @@
   </div>
 </div>
 
+<!-- User passcode gate (required before claiming or flagging a task) -->
+<div class="overlay hidden" id="userOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="userOverlay">&times;</button>
+    <h2>Enter passcode</h2>
+    <p class="sub">This passcode is required to claim or update a task.</p>
+    <div class="field">
+      <label>Passcode</label>
+      <input type="password" id="userPasscodeInput" autocomplete="off">
+    </div>
+    <div class="error-msg" id="userError"></div>
+    <div class="modal-actions">
+      <button class="ghost" data-close="userOverlay">Cancel</button>
+      <button class="primary" id="userSubmit">Unlock</button>
+    </div>
+  </div>
+</div>
+
 <!-- History detail modal -->
 <div class="overlay hidden" id="historyDetailOverlay">
   <div class="modal">
@@ -264,6 +282,18 @@ let activeTab = 'board';
 let claimingStationId = null;
 
 function zoneLabel(z) { return ZONE_LABELS[z] || z; }
+
+function userToken() { return sessionStorage.getItem('userToken'); }
+function setUserToken(t) { sessionStorage.setItem('userToken', t); }
+let pendingUserAction = null;
+function requireUser(action) {
+  if (userToken()) { action(); return; }
+  pendingUserAction = action;
+  document.getElementById('userPasscodeInput').value = '';
+  document.getElementById('userError').textContent = '';
+  show('userOverlay');
+  document.getElementById('userPasscodeInput').focus();
+}
 
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
@@ -421,8 +451,25 @@ function taskRowHtml(t) {
 }
 
 function toggleHelp(taskId) {
-  api('toggleHelp', { taskId }).then(refreshBoard).catch(e => alert(e.message));
+  requireUser(() => {
+    api('toggleHelp', { taskId, userToken: userToken() }).then(refreshBoard).catch(e => alert(e.message));
+  });
 }
+
+document.getElementById('userSubmit').addEventListener('click', async () => {
+  const passcode = document.getElementById('userPasscodeInput').value;
+  const err = document.getElementById('userError');
+  err.textContent = '';
+  try {
+    const data = await api('userVerify', { passcode });
+    setUserToken(data.token);
+    hide('userOverlay');
+    if (pendingUserAction) pendingUserAction();
+  } catch (e) { err.textContent = e.message; }
+});
+document.getElementById('userPasscodeInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('userSubmit').click();
+});
 
 // --- Claim modal ---
 function openClaim(stationId) {
@@ -436,7 +483,8 @@ function openClaim(stationId) {
   show('claimOverlay');
   document.getElementById('ownerNameInput').focus();
 }
-document.getElementById('claimSubmit').addEventListener('click', async () => {
+document.getElementById('claimSubmit').addEventListener('click', () => requireUser(submitClaim));
+async function submitClaim() {
   const err = document.getElementById('claimError');
   err.textContent = '';
   try {
@@ -445,13 +493,14 @@ document.getElementById('claimSubmit').addEventListener('click', async () => {
       ownerName: document.getElementById('ownerNameInput').value,
       taskLabel: document.getElementById('taskLabelInput').value,
       kit: document.getElementById('kitInput').value,
+      userToken: userToken(),
     });
     // Drop the person straight into their new task's dedicated page (notes,
     // file upload, status controls) instead of back at the grid - they
     // came here to start working on it, not to look at the board again.
     if (data.created) openTask(data.created.id);
   } catch (e) { err.textContent = e.message; }
-});
+}
 
 // Task detail lives on its own page now (task.html), one task at a time,
 // instead of a popup modal here on the board.

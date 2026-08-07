@@ -12,7 +12,14 @@ import {
   appendHistory,
   slugify,
 } from "./lib/state.mjs";
-import { newAdminToken, resolveAdminToken, checkBoardAdminPasscode } from "./lib/auth.mjs";
+import {
+  newAdminToken,
+  resolveAdminToken,
+  checkBoardAdminPasscode,
+  newUserToken,
+  resolveUserToken,
+  checkUserPasscode,
+} from "./lib/auth.mjs";
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -23,6 +30,13 @@ class ApiError extends Error {
 
 function isAdmin(body) {
   return !!body.adminToken && resolveAdminToken(body.adminToken);
+}
+
+// Basic "you're on the team" gate for claiming/updating/attaching to a
+// task - a valid admin token satisfies it too, since lab admin can always
+// do anything a regular user can.
+function isUser(body) {
+  return isAdmin(body) || (!!body.userToken && resolveUserToken(body.userToken));
 }
 
 // The zone filter bar shows every config-defined zone plus any custom zone
@@ -61,11 +75,19 @@ export default withErrorBoundary(async (req) => {
       return json({ token: newAdminToken() });
     }
 
+    if (action === "userVerify") {
+      if (!checkUserPasscode(body.passcode)) {
+        return json({ error: "incorrect passcode" }, 401);
+      }
+      return json({ token: newUserToken() });
+    }
+
     // Starts a new task slot at a station. Not gated on the station being
     // "free" - any number of people can claim the same station at once on
     // separate devices, so this always succeeds as long as the station
     // exists.
     if (action === "claim") {
+      if (!isUser(body)) return json({ error: "passcode required" }, 401);
       const ownerName = (body.ownerName || "").trim();
       const taskLabel = (body.taskLabel || "").trim();
       const kit = (body.kit || "").trim();
@@ -89,6 +111,7 @@ export default withErrorBoundary(async (req) => {
     // Status may move between in-progress and blocked here; moving into
     // review or completing are their own actions (see below).
     if (action === "addUpdate") {
+      if (!isUser(body)) return json({ error: "passcode required" }, 401);
       const note = (body.note || "").trim();
       if (!note) return json({ error: "an update note is required" }, 400);
       const nextStatus = body.status === "blocked" ? "blocked" : body.status === "in-progress" ? "in-progress" : null;
@@ -117,6 +140,7 @@ export default withErrorBoundary(async (req) => {
     // required so there's always a "here's what I did" summary going into
     // review.
     if (action === "sendToReview") {
+      if (!isUser(body)) return json({ error: "passcode required" }, 401);
       const note = (body.note || "").trim();
       if (!note) return json({ error: "a note is required to send this to review" }, 400);
 
@@ -229,6 +253,7 @@ export default withErrorBoundary(async (req) => {
     }
 
     if (action === "toggleHelp") {
+      if (!isUser(body)) return json({ error: "passcode required" }, 401);
       const tasks = await mutateTasks((tasks) => {
         const idx = tasks.findIndex((t) => t.id === body.taskId);
         if (idx === -1) throw new ApiError("task not found", 404);
@@ -244,6 +269,7 @@ export default withErrorBoundary(async (req) => {
     // entry - separate from addUpdate so a screenshot/file can be dropped
     // in without also having to write a periodic status note.
     if (action === "addAttachment") {
+      if (!isUser(body)) return json({ error: "passcode required" }, 401);
       const { key, filename, mimeType, size } = body.attachment || {};
       if (!key || !filename) return json({ error: "attachment upload failed" }, 400);
       const note = (body.note || "").trim();

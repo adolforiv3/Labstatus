@@ -120,11 +120,25 @@
   .close-x{ position:absolute; top:14px; right:14px; background:transparent; border:none; font-size:20px; color:var(--ink-soft); padding:4px 8px; }
 
   .empty-state{ text-align:center; padding:80px 20px; color:var(--ink-soft); font-size:16px; }
+  .gate{ max-width:400px; margin:80px auto; padding:0 20px; }
 </style>
 </head>
 <body>
 
-<main>
+<div id="gateView" class="gate">
+  <div class="section">
+    <h2 style="margin-bottom:6px;">Enter passcode</h2>
+    <p class="sub" style="margin-bottom:16px;">A passcode is required to view or work on a task.</p>
+    <div class="field">
+      <label>Passcode</label>
+      <input type="password" id="userPasscodeInput" autocomplete="off">
+    </div>
+    <div class="error-msg" id="gateError"></div>
+    <button class="primary" id="userSubmit" style="width:100%;">Unlock</button>
+  </div>
+</div>
+
+<main class="hidden" id="mainView">
   <a class="back-link" href="/">&larr; Back to board</a>
   <div id="content"></div>
 </main>
@@ -155,6 +169,8 @@ let station = null;
 
 function adminToken() { return sessionStorage.getItem('adminToken'); }
 function setAdminToken(t) { sessionStorage.setItem('adminToken', t); }
+function userToken() { return sessionStorage.getItem('userToken'); }
+function setUserToken(t) { sessionStorage.setItem('userToken', t); }
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 document.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => hide(btn.dataset.close)));
@@ -277,7 +293,7 @@ function render() {
   `;
 
   document.getElementById('helpBtn').addEventListener('click', async () => {
-    try { await api('toggleHelp', { taskId }); await load(); } catch (e) { alert(e.message); }
+    try { await api('toggleHelp', { taskId, userToken: userToken() }); await load(); } catch (e) { alert(e.message); }
   });
   document.getElementById('attachmentInput').addEventListener('change', onAttachmentChange);
   if (document.getElementById('markBlockedBtn')) {
@@ -309,7 +325,7 @@ async function submitAction(action, extra, isTerminal) {
   const note = currentNote();
   if (!note) { err.textContent = 'a note is required'; return; }
   try {
-    await api(action, { taskId, note, ...extra });
+    await api(action, { taskId, note, userToken: userToken(), ...extra });
     if (isTerminal) { location.href = '/'; return; }
     await load();
   } catch (e) { err.textContent = e.message; }
@@ -346,7 +362,7 @@ async function onAttachmentChange(e) {
     });
     const uploaded = await uploadRes.json().catch(() => ({}));
     if (!uploadRes.ok) throw new Error(uploaded.error || 'upload failed');
-    await api('addAttachment', { taskId, attachment: uploaded });
+    await api('addAttachment', { taskId, attachment: uploaded, userToken: userToken() });
     await load();
   } catch (ex) {
     err.textContent = ex.message;
@@ -376,12 +392,30 @@ document.getElementById('leadSubmit').addEventListener('click', async () => {
 });
 document.getElementById('leadPasscodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('leadSubmit').click(); });
 
-if (!taskId) {
-  document.getElementById('content').innerHTML = '<div class="empty-state">No task specified. <br><a href="/">Return to the board</a></div>';
-} else {
-  load();
-  setInterval(() => { if (task) load(); }, 3000);
+function enterMainView() {
+  document.getElementById('gateView').classList.add('hidden');
+  document.getElementById('mainView').classList.remove('hidden');
+  if (!taskId) {
+    document.getElementById('content').innerHTML = '<div class="empty-state">No task specified. <br><a href="/">Return to the board</a></div>';
+  } else {
+    load();
+    setInterval(() => { if (task) load(); }, 3000);
+  }
 }
+
+document.getElementById('userSubmit').addEventListener('click', async () => {
+  const passcode = document.getElementById('userPasscodeInput').value;
+  const err = document.getElementById('gateError');
+  err.textContent = '';
+  try {
+    const data = await api('userVerify', { passcode });
+    setUserToken(data.token);
+    enterMainView();
+  } catch (e) { err.textContent = e.message; }
+});
+document.getElementById('userPasscodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('userSubmit').click(); });
+
+if (userToken()) enterMainView();
 </script>
 </body>
 </html>
