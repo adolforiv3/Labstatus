@@ -184,7 +184,7 @@
   </div>
   <div class="header-actions">
     <span class="clock mono" id="clock"></span>
-    <button class="ghost small" id="adminBtn">Lab Lead</button>
+    <button class="ghost small" id="adminBtn">Lab Admin</button>
   </div>
 </header>
 
@@ -270,7 +270,7 @@
   <div class="modal">
     <button class="close-x" data-close="leadOverlay">&times;</button>
     <h2>Lab lead passcode</h2>
-    <p class="sub">Approving, rejecting, or force-releasing a task requires the lab lead passcode.</p>
+    <p class="sub">Approving, rejecting, or force-releasing a task requires the lab admin passcode.</p>
     <div class="field">
       <label>Passcode</label>
       <input type="password" id="leadPasscodeInput" autocomplete="off">
@@ -287,9 +287,9 @@
 <div class="overlay hidden" id="adminOverlay">
   <div class="modal">
     <button class="close-x" data-close="adminOverlay">&times;</button>
-    <h2>Lab Lead / Admin</h2>
+    <h2>Lab Admin</h2>
     <div id="adminGate">
-      <p class="sub">Enter the lab lead passcode.</p>
+      <p class="sub">Enter the lab admin passcode.</p>
       <div class="field">
         <label>Passcode</label>
         <input type="password" id="adminPasscodeInput" autocomplete="off">

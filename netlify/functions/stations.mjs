@@ -153,7 +153,7 @@ export default withErrorBoundary(async (req) => {
     // it left off (rather than restarting at zero) by backdating
     // taskStartedAt by whatever task time had already accumulated.
     if (action === "rejectReview") {
-      if (!isAdmin(body)) return json({ error: "lab lead passcode required" }, 401);
+      if (!isAdmin(body)) return json({ error: "lab admin passcode required" }, 401);
       const note = (body.note || "").trim();
       if (!note) return json({ error: "a note is required to send this back" }, 400);
 
@@ -185,7 +185,7 @@ export default withErrorBoundary(async (req) => {
     // approval step, not something the person who did the work signs off
     // on themselves.
     if (action === "completeTask") {
-      if (!isAdmin(body)) return json({ error: "lab lead passcode required to approve and complete this task" }, 401);
+      if (!isAdmin(body)) return json({ error: "lab admin passcode required to approve and complete this task" }, 401);
       const note = (body.note || "").trim();
       if (!note) return json({ error: "a closing note is required to complete this task" }, 400);
 
