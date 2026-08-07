@@ -1,5 +1,7 @@
 import { loadHistory } from "./lib/state.mjs";
 import { withErrorBoundary } from "./lib/http.mjs";
+import { attachmentsStore } from "./lib/stores.mjs";
+import { buildZip } from "./lib/zip.mjs";
 
 function esc(s) {
   return String(s ?? "").replace(/[&<>"']/g, (c) => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]));
@@ -15,12 +17,25 @@ function fmtDuration(ms) {
   return h > 0 ? `${h}h ${pad(m)}m ${pad(s)}s` : `${m}m ${pad(s)}s`;
 }
 
+function attachmentsOf(entry) {
+  return entry.updates.filter((u) => u.attachment).map((u) => u.attachment);
+}
+
 // Renders one completed task as a standalone, self-contained HTML document
 // - readable directly, and printable to PDF from the browser - so it can be
 // handed off to engineering with the full note timeline and links back to
 // every uploaded attachment (attachments stay served from this same site,
-// not embedded, since some can be several MB).
+// not embedded, since some can be several MB). Individual files stay
+// downloadable one at a time via their own links; a "download all" zip
+// link is added up top whenever there's more than one file, so whoever's
+// handed the report isn't stuck clicking through each one separately.
 function renderReport(entry, origin) {
+  const attachments = attachmentsOf(entry);
+  const downloadAllHtml =
+    attachments.length > 1
+      ? `<a class="download-all" href="${origin}/.netlify/functions/report?id=${encodeURIComponent(entry.id)}&format=zip">⬇ Download all ${attachments.length} files (.zip)</a>`
+      : "";
+
   const updatesHtml = entry.updates.length
     ? entry.updates
         .map(
@@ -60,12 +75,17 @@ function renderReport(entry, origin) {
   .entry-attachment{ margin-top:8px; font-size:13px; }
   .entry-attachment a{ color:#5e5ce6; }
   .empty{ color:#6e6e73; font-size:14px; }
-  @media print{ body{ margin:0; } }
+  .download-all{
+    display:inline-block; margin-top:14px; padding:10px 18px; border-radius:10px;
+    background:#5e5ce6; color:#fff; text-decoration:none; font-size:14px; font-weight:600;
+  }
+  @media print{ .download-all{ display:none; } body{ margin:0; } }
 </style>
 </head>
 <body>
   <h1>${esc(entry.taskLabel)}</h1>
   <div class="sub">${esc(entry.stationName)} · Completed ${esc(new Date(entry.completedAt).toLocaleString())}</div>
+  ${downloadAllHtml}
 
   <div class="meta-grid">
     <div class="meta-item"><div class="label">Station</div><div class="value">${esc(entry.stationName)}</div></div>
@@ -91,6 +111,29 @@ export default withErrorBoundary(async (req) => {
   const history = await loadHistory();
   const entry = history.find((h) => h.id === id);
   if (!entry) return new Response("report not found", { status: 404 });
+
+  if (url.searchParams.get("format") === "zip") {
+    const attachments = attachmentsOf(entry);
+    if (!attachments.length) return new Response("no attachments to bundle", { status: 404 });
+
+    const store = attachmentsStore();
+    const files = [];
+    for (const att of attachments) {
+      const result = await store.get(att.key, { type: "arrayBuffer" });
+      if (result) files.push({ name: att.filename, data: Buffer.from(result) });
+    }
+    if (!files.length) return new Response("no attachments found", { status: 404 });
+
+    const zip = buildZip(files);
+    const zipFilename = `task-files-${entry.stationName}-${entry.completedAt.slice(0, 10)}.zip`.replace(/[^a-z0-9.\-]+/gi, "-");
+    return new Response(zip, {
+      status: 200,
+      headers: {
+        "content-type": "application/zip",
+        "content-disposition": `attachment; filename="${zipFilename}"`,
+      },
+    });
+  }
 
   const html = renderReport(entry, url.origin);
   const filename = `task-report-${entry.stationName}-${entry.completedAt.slice(0, 10)}.html`.replace(/[^a-z0-9.\-]+/gi, "-");
