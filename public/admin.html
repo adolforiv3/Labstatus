@@ -218,6 +218,11 @@ async function refresh() {
 }
 
 function render() {
+  // The whole page re-renders every 3s to pick up new/changed reviews and
+  // metrics - without preserving it, scrolling down to read/act on a
+  // review (or the page itself) kept getting yanked back to the top
+  // mid-scroll, and a note being typed for approve/reject would vanish.
+  const preservedPageScroll = window.scrollY;
   renderMetrics();
   renderReviews();
   const sel = document.getElementById('adminStationSelect');
@@ -225,6 +230,7 @@ function render() {
   sel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
   syncStationRenameInput();
+  window.scrollTo(0, preservedPageScroll);
 }
 
 function avg(nums) {
@@ -259,6 +265,21 @@ function renderMetrics() {
 function renderReviews() {
   const list = document.getElementById('reviewList');
   const reviews = state.tasks.filter(t => t.status === 'review');
+
+  // Same re-render-wipes-everything problem as the page scroll: preserve
+  // each card's in-progress note text, its own review-log scroll, and
+  // which note field (if any) had focus, keyed by task id so it survives
+  // this list being fully rebuilt.
+  const preservedNotes = {};
+  const preservedLogScrolls = {};
+  document.querySelectorAll('.review-card').forEach(card => {
+    const ta = card.querySelector('textarea');
+    const log = card.querySelector('.review-log');
+    if (ta) preservedNotes[ta.id] = ta.value;
+    if (ta && log) preservedLogScrolls[ta.id] = log.scrollTop;
+  });
+  const focusedId = document.activeElement && document.activeElement.tagName === 'TEXTAREA' ? document.activeElement.id : null;
+
   if (!reviews.length) {
     list.innerHTML = '<div class="empty-hint">Nothing waiting on review right now.</div>';
     return;
@@ -267,6 +288,14 @@ function renderReviews() {
   reviews.forEach(t => {
     document.getElementById('approve-' + t.id).addEventListener('click', () => completeReview(t.id));
     document.getElementById('reject-' + t.id).addEventListener('click', () => rejectReview(t.id));
+    const noteId = 'note-' + t.id;
+    const ta = document.getElementById(noteId);
+    const log = ta ? ta.closest('.review-card').querySelector('.review-log') : null;
+    if (ta && preservedNotes[noteId]) {
+      ta.value = preservedNotes[noteId];
+      if (focusedId === noteId) ta.focus();
+    }
+    if (log && preservedLogScrolls[noteId] != null) log.scrollTop = preservedLogScrolls[noteId];
   });
 }
 

@@ -388,11 +388,16 @@ function renderZoneChips() {
 }
 
 function render() {
+  // Board grid rebuilds every 1s for live timers - without preserving it,
+  // scrolling through a long list of stations kept getting reset to the
+  // top mid-scroll.
+  const preservedPageScroll = window.scrollY;
   renderZoneChips();
   const grid = document.getElementById('grid');
   const visible = state.stations.filter(s => activeZone === 'all' || s.zone === activeZone);
   if (!visible.length) {
     grid.innerHTML = '<div class="empty-state">No stations in this zone.</div>';
+    window.scrollTo(0, preservedPageScroll);
     return;
   }
   grid.innerHTML = visible.map(stationHtml).join('');
@@ -405,6 +410,7 @@ function render() {
   grid.querySelectorAll('.help-btn').forEach(el => {
     el.addEventListener('click', (e) => { e.stopPropagation(); toggleHelp(el.dataset.id); });
   });
+  window.scrollTo(0, preservedPageScroll);
 }
 
 function stationHtml(s) {
