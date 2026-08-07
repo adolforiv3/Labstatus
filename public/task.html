@@ -271,7 +271,7 @@ function render() {
     </div>
 
     <div class="section">
-      <h2>${inReview ? 'Closing note (required)' : 'Update note (required)'}</h2>
+      <h2>${inReview ? 'Closing note (optional)' : 'Update note (required)'}</h2>
       <div class="field">
         <textarea id="noteInput" rows="3" placeholder="What's the latest?"></textarea>
       </div>
@@ -350,7 +350,11 @@ async function submitAction(action, extra, isTerminal) {
   const err = document.getElementById('taskError');
   err.textContent = '';
   const note = currentNote();
-  if (!note) { err.textContent = 'a note is required'; return; }
+  // completeTask/rejectReview (the lab admin's approve/send-back step)
+  // don't require a note - everything else (routine updates, sending to
+  // review in the first place) still does.
+  const noteRequired = action === 'addUpdate' || action === 'sendToReview';
+  if (noteRequired && !note) { err.textContent = 'a note is required'; return; }
   try {
     await api(action, { taskId, note, userToken: userToken(), ...extra });
     if (isTerminal) { location.href = '/'; return; }

@@ -319,7 +319,7 @@ function reviewCardHtml(t) {
     </div>
     <div class="review-log">${log}</div>
     <div class="field" style="margin-top:10px; margin-bottom:0;">
-      <label>Note (required to approve or send back)</label>
+      <label>Note (optional)</label>
       <textarea id="note-${t.id}" rows="2"></textarea>
     </div>
     <div class="error-msg" id="err-${t.id}"></div>
@@ -330,25 +330,39 @@ function reviewCardHtml(t) {
   </div>`;
 }
 
+// If a call fails specifically because the stored admin session token is
+// missing/expired/invalid, don't just dead-end on an error message - drop
+// back to the passcode gate so re-entering it is the only step needed to
+// pick up right where they were, instead of leaving them stuck on a page
+// that looks like it should already work.
+function handleAdminActionError(e, err) {
+  if (/passcode/i.test(e.message)) {
+    sessionStorage.removeItem('adminToken');
+    document.getElementById('adminView').classList.add('hidden');
+    document.getElementById('gateView').classList.remove('hidden');
+    document.getElementById('gateError').textContent = 'Your session expired - please re-enter the passcode.';
+    return;
+  }
+  err.textContent = e.message;
+}
+
 async function completeReview(taskId) {
   const note = document.getElementById('note-' + taskId).value.trim();
   const err = document.getElementById('err-' + taskId);
-  if (!note) { err.textContent = 'a closing note is required'; return; }
   err.textContent = '';
   try {
     await api('completeTask', { taskId, note, adminToken: adminToken() });
     await refresh();
-  } catch (e) { err.textContent = e.message; }
+  } catch (e) { handleAdminActionError(e, err); }
 }
 async function rejectReview(taskId) {
   const note = document.getElementById('note-' + taskId).value.trim();
   const err = document.getElementById('err-' + taskId);
-  if (!note) { err.textContent = 'a note is required to send this back'; return; }
   err.textContent = '';
   try {
     await api('rejectReview', { taskId, note, adminToken: adminToken() });
     await refresh();
-  } catch (e) { err.textContent = e.message; }
+  } catch (e) { handleAdminActionError(e, err); }
 }
 
 function syncStationRenameInput() {

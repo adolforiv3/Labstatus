@@ -174,8 +174,7 @@ export default withErrorBoundary(async (req) => {
     // taskStartedAt by whatever task time had already accumulated.
     if (action === "rejectReview") {
       if (!isAdmin(body)) return json({ error: "lab admin passcode required" }, 401);
-      const note = (body.note || "").trim();
-      if (!note) return json({ error: "a note is required to send this back" }, 400);
+      const note = (body.note || "").trim() || "Sent back for more work.";
 
       const tasks = await mutateTasks((tasks) => {
         const idx = tasks.findIndex((t) => t.id === body.taskId);
@@ -205,8 +204,7 @@ export default withErrorBoundary(async (req) => {
     // not something the person who did the work signs off on themselves.
     if (action === "completeTask") {
       if (!isAdmin(body)) return json({ error: "lab admin passcode required to approve and complete this task" }, 401);
-      const note = (body.note || "").trim();
-      if (!note) return json({ error: "a closing note is required to complete this task" }, 400);
+      const note = (body.note || "").trim() || "Approved.";
 
       const stations = await loadStations();
       let historyEntry = null;
