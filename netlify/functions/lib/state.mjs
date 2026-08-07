@@ -10,7 +10,10 @@ function emptyStationState(cfg) {
     id: cfg.id,
     name: cfg.name,
     zone: cfg.zone,
-    assignedTeamId: null,
+    // Defaults to the single seeded team (see DEFAULT_TEAMS in config.mjs)
+    // so every station is claimable immediately with one study running -
+    // an admin can reassign individual stations once more teams exist.
+    assignedTeamId: DEFAULT_TEAMS[0] ? DEFAULT_TEAMS[0].id : null,
     ownerName: null,
     taskLabel: null,
     status: "idle",
@@ -30,9 +33,11 @@ function mergeWithConfig(stored) {
   return STATIONS.map((cfg) => {
     const existing = byId.get(cfg.id);
     if (!existing) return emptyStationState(cfg);
-    // Name/zone always follow the config (source of truth for layout);
-    // everything else is live state.
-    return { ...existing, name: cfg.name, zone: cfg.zone };
+    // Zone always follows the config (source of truth for layout/filtering).
+    // Name defaults from the config but stays whatever an admin has renamed
+    // it to via adminRenameStation - falling back to the config name only
+    // when nothing's been persisted yet.
+    return { ...existing, name: existing.name || cfg.name, zone: cfg.zone };
   });
 }
 

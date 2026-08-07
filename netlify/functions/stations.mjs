@@ -208,6 +208,34 @@ export default withErrorBoundary(async (req) => {
       return json({ stations: stations.map(withStaleFlag) });
     }
 
+    if (action === "adminRenameStation") {
+      if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
+      const name = (body.name || "").trim();
+      if (!name) return json({ error: "station name required" }, 400);
+      const stations = await mutateStations((stations) => {
+        const idx = stations.findIndex((s) => s.id === body.stationId);
+        if (idx === -1) throw new ApiError("station not found", 404);
+        const next = [...stations];
+        next[idx] = { ...stations[idx], name };
+        return next;
+      });
+      return json({ stations: stations.map(withStaleFlag) });
+    }
+
+    if (action === "adminRenameTeam") {
+      if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
+      const name = (body.name || "").trim();
+      if (!name) return json({ error: "team name required" }, 400);
+      const teams = await mutateTeams((teams) => {
+        const idx = teams.findIndex((t) => t.id === body.teamId);
+        if (idx === -1) throw new ApiError("team not found", 404);
+        const next = [...teams];
+        next[idx] = { ...teams[idx], name };
+        return next;
+      });
+      return json({ teams: teams.map(publicTeam) });
+    }
+
     if (action === "adminSetTeamPasscode") {
       if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
       const teamId = (body.teamId || "").trim();

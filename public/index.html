@@ -255,12 +255,22 @@
         <button class="ghost small" id="adminReassignBtn">Reassign</button>
         <button class="danger small" id="adminForceReleaseBtn">Force release</button>
       </div>
+      <div class="field">
+        <label>Rename this station</label>
+        <input type="text" id="adminStationRenameInput">
+      </div>
+      <button class="ghost small" id="adminRenameStationBtn">Rename station</button>
       <hr style="margin:20px 0; border:none; border-top:1px solid var(--border);">
       <div class="field">
         <label>Team</label>
         <select id="adminPasscodeTeamSelect"></select>
       </div>
       <div class="field">
+        <label>Rename this team</label>
+        <input type="text" id="adminTeamRenameInput">
+      </div>
+      <button class="ghost small" id="adminRenameTeamBtn">Rename team</button>
+      <div class="field" style="margin-top:14px;">
         <label>New passcode</label>
         <input type="text" id="adminNewPasscodeInput">
       </div>
@@ -532,8 +542,50 @@ function openAdminPanel() {
   stationSel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   const teamOptions = '<option value="">Unassigned</option>' + state.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
   document.getElementById('adminTeamSelect').innerHTML = teamOptions;
-  document.getElementById('adminPasscodeTeamSelect').innerHTML = state.teams.map(t => `<option value="${t.id}">${esc(t.name)}${t.hasPasscode ? '' : ' (no passcode set)'}</option>`).join('');
+  const passcodeTeamSel = document.getElementById('adminPasscodeTeamSelect');
+  passcodeTeamSel.innerHTML = state.teams.map(t => `<option value="${t.id}">${esc(t.name)}${t.hasPasscode ? '' : ' (no passcode set)'}</option>`).join('');
+  syncStationRenameInput();
+  syncTeamRenameInput();
 }
+
+function syncStationRenameInput() {
+  const s = state.stations.find(s => s.id === document.getElementById('adminStationSelect').value);
+  document.getElementById('adminStationRenameInput').value = s ? s.name : '';
+}
+function syncTeamRenameInput() {
+  const t = state.teams.find(t => t.id === document.getElementById('adminPasscodeTeamSelect').value);
+  document.getElementById('adminTeamRenameInput').value = t ? t.name : '';
+}
+document.getElementById('adminStationSelect').addEventListener('change', syncStationRenameInput);
+document.getElementById('adminPasscodeTeamSelect').addEventListener('change', syncTeamRenameInput);
+
+document.getElementById('adminRenameStationBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    await api('adminRenameStation', {
+      adminToken: adminToken(),
+      stationId: document.getElementById('adminStationSelect').value,
+      name: document.getElementById('adminStationRenameInput').value,
+    });
+    await refresh();
+    openAdminPanel();
+  } catch (e) { err.textContent = e.message; }
+});
+
+document.getElementById('adminRenameTeamBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    await api('adminRenameTeam', {
+      adminToken: adminToken(),
+      teamId: document.getElementById('adminPasscodeTeamSelect').value,
+      name: document.getElementById('adminTeamRenameInput').value,
+    });
+    await refresh();
+    openAdminPanel();
+  } catch (e) { err.textContent = e.message; }
+});
 
 document.getElementById('adminReassignBtn').addEventListener('click', async () => {
   const err = document.getElementById('adminPanelError');
