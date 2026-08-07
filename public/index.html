@@ -64,18 +64,18 @@
   .clock{ font-size:15px; color:var(--ink-soft); }
   main{ max-width:1400px; margin:0 auto; padding:0 24px; }
 
-  button{
+  button, a.btn{
     font-family:inherit; font-size:15px; font-weight:600; border:none; cursor:pointer;
     border-radius:var(--r-sm); padding:10px 16px; transition:transform .1s ease, opacity .15s ease;
     background:var(--card); color:var(--ink); border:1px solid var(--border);
   }
-  button:active{ transform:scale(0.97); }
+  button:active, a.btn:active{ transform:scale(0.97); }
   button:disabled{ opacity:.5; cursor:default; }
-  button.primary{ background:var(--teal); color:#fff; border-color:transparent; }
-  button.danger{ background:var(--red); color:#fff; border-color:transparent; }
-  button.ghost{ background:transparent; border-color:var(--border); }
-  button.small{ padding:6px 11px; font-size:13px; }
-  button:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+  button.primary, a.btn.primary{ background:var(--teal); color:#fff; border-color:transparent; }
+  button.danger, a.btn.danger{ background:var(--red); color:#fff; border-color:transparent; }
+  button.ghost, a.btn.ghost{ background:transparent; border-color:var(--border); }
+  button.small, a.btn.small{ padding:6px 11px; font-size:13px; }
+  button:focus-visible, a.btn:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
 
   .tabbar{ display:flex; gap:8px; margin-bottom:18px; }
   .tab{
@@ -187,6 +187,7 @@
   </div>
   <div class="header-actions">
     <span class="clock mono" id="clock"></span>
+    <a class="btn ghost small" href="/display.html" target="_blank" rel="noopener">Display Mode</a>
     <button class="ghost small" id="adminBtn">Lab Admin</button>
   </div>
 </header>
@@ -342,6 +343,9 @@
     <h2 id="historyDetailTitle">Task</h2>
     <p class="sub" id="historyDetailSub"></p>
     <div class="updates-log" id="historyDetailLog"></div>
+    <div class="modal-actions">
+      <a class="btn primary" id="historyDetailDownload" href="#" style="text-align:center; text-decoration:none; display:block;">Download report</a>
+    </div>
   </div>
 </div>
 
@@ -794,6 +798,7 @@ function openHistoryDetail(h) {
   document.getElementById('historyDetailLog').innerHTML = h.updates.length
     ? h.updates.map(updateEntryHtml).join('')
     : '<div class="empty">No update notes.</div>';
+  document.getElementById('historyDetailDownload').href = '/.netlify/functions/report?id=' + encodeURIComponent(h.id);
   show('historyDetailOverlay');
 }
 
