@@ -135,14 +135,13 @@ export default withErrorBoundary(async (req) => {
     });
   }
 
+  // Served inline (not as an attachment download) so the link opens as a
+  // normal page to read through first - the actual file downloads (the
+  // report's own individual attachment links, or the "download all" zip)
+  // happen from within that view, not as the first click.
   const html = renderReport(entry, url.origin);
-  const filename = `task-report-${entry.stationName}-${entry.completedAt.slice(0, 10)}.html`.replace(/[^a-z0-9.\-]+/gi, "-");
-
   return new Response(html, {
     status: 200,
-    headers: {
-      "content-type": "text/html; charset=utf-8",
-      "content-disposition": `attachment; filename="${filename}"`,
-    },
+    headers: { "content-type": "text/html; charset=utf-8" },
   });
 });
