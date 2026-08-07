@@ -256,7 +256,6 @@
     <div class="updates-log" id="historyDetailLog"></div>
     <div class="modal-actions">
       <a class="btn" id="historyDetailDownload" href="#" target="_blank" rel="noopener">View report</a>
-      <a class="btn hidden" id="historyDetailDownloadZip" href="#">Download all files (.zip)</a>
     </div>
   </div>
 </div>
@@ -603,13 +602,6 @@ function openHistoryDetail(h) {
     ? h.updates.map(updateEntryHtml).join('')
     : '<div class="empty">No update notes.</div>';
   document.getElementById('historyDetailDownload').href = '/.netlify/functions/report?id=' + encodeURIComponent(h.id);
-  const attachmentCount = (h.updates || []).filter(u => u.attachment).length;
-  const zipBtn = document.getElementById('historyDetailDownloadZip');
-  zipBtn.classList.toggle('hidden', attachmentCount < 2);
-  if (attachmentCount >= 2) {
-    zipBtn.href = '/.netlify/functions/report?id=' + encodeURIComponent(h.id) + '&format=zip';
-    zipBtn.textContent = `Download all ${attachmentCount} files (.zip)`;
-  }
   document.getElementById('historyDetailOverlay').classList.remove('hidden');
 }
 document.getElementById('historyDetailClose').addEventListener('click', () => {
