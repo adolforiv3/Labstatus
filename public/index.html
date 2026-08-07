@@ -143,6 +143,7 @@
   }
   .hidden{ display:none !important; }
   .modal{
+    position:relative;
     background:var(--card); border-radius:var(--r-lg); box-shadow:var(--shadow-lg); padding:28px;
     width:100%; max-width:440px; max-height:90vh; overflow-y:auto;
   }
@@ -363,6 +364,16 @@ function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
 document.querySelectorAll('[data-close]').forEach(btn => {
   btn.addEventListener('click', () => hide(btn.dataset.close));
+});
+// Clicking the dimmed backdrop (outside the modal itself) also closes it.
+document.querySelectorAll('.overlay').forEach(overlay => {
+  overlay.addEventListener('click', (e) => {
+    if (e.target === overlay) overlay.classList.add('hidden');
+  });
+});
+document.addEventListener('keydown', (e) => {
+  if (e.key !== 'Escape') return;
+  document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden'));
 });
 
 function esc(s) {
