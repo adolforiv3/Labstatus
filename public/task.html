@@ -98,6 +98,15 @@
   }
   textarea:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 4px var(--teal-bg); }
   .error-msg{ color:var(--red); font-size:13px; margin-top:8px; min-height:16px; }
+  .pending-file{
+    display:flex; justify-content:space-between; align-items:center; gap:10px;
+    padding:9px 12px; border:1px solid var(--border); border-radius:var(--r-sm); margin-top:8px; font-size:14px;
+  }
+  .pending-file .file-name{ overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+  .pending-file .file-size{ color:var(--ink-soft); font-size:12px; flex-shrink:0; }
+  .pending-file button{ padding:4px 10px; font-size:12px; flex-shrink:0; }
+  .attachment-row{ display:flex; align-items:center; gap:10px; margin-top:4px; }
+  .attachment-delete-btn{ background:var(--red-bg); color:var(--red); border-color:transparent; }
   .action-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
   .action-row button{ flex:1; min-width:140px; }
 
@@ -203,7 +212,10 @@ async function load() {
 
 function updateEntryHtml(u) {
   const att = u.attachment
-    ? `<div><a href="/.netlify/functions/attachments?key=${encodeURIComponent(u.attachment.key)}" target="_blank" rel="noopener">📎 ${esc(u.attachment.filename)}</a></div>`
+    ? `<div class="attachment-row">
+         <a href="/.netlify/functions/attachments?key=${encodeURIComponent(u.attachment.key)}" target="_blank" rel="noopener">📎 ${esc(u.attachment.filename)}</a>
+         <button class="attachment-delete-btn small" data-delete-attachment="${esc(u.attachment.key)}" title="Delete this file">Delete</button>
+       </div>`
     : '';
   return `<div class="entry"><div>${esc(u.note)}</div>${att}<div class="meta">${new Date(u.ts).toLocaleString([], {hour:'2-digit', minute:'2-digit'})} · ${esc(u.status)}</div></div>`;
 }
@@ -244,12 +256,14 @@ function render() {
     </div>
 
     <div class="section">
-      <h2>Attach a file</h2>
+      <h2>Attach files</h2>
       <div class="field">
-        <label>Screenshot, .txt, etc. — 8MB max</label>
-        <input type="file" id="attachmentInput">
+        <label>Screenshots, .txt, etc. — 8MB max each, select multiple at once</label>
+        <input type="file" id="attachmentInput" multiple>
       </div>
+      <div id="pendingFilesList"></div>
       <div class="error-msg" id="attachmentError"></div>
+      <button class="primary hidden" id="uploadFilesBtn" style="width:100%; margin-top:10px;">Upload files</button>
     </div>
 
     <div class="section">
@@ -296,6 +310,11 @@ function render() {
     try { await api('toggleHelp', { taskId, userToken: userToken() }); await load(); } catch (e) { alert(e.message); }
   });
   document.getElementById('attachmentInput').addEventListener('change', onAttachmentChange);
+  renderPendingFiles();
+  document.getElementById('uploadFilesBtn').addEventListener('click', uploadPendingFiles);
+  document.querySelectorAll('[data-delete-attachment]').forEach(btn => {
+    btn.addEventListener('click', () => deleteAttachment(btn.dataset.deleteAttachment));
+  });
   if (document.getElementById('markBlockedBtn')) {
     document.getElementById('markBlockedBtn').addEventListener('click', () => {
       submitAction('addUpdate', { status: task.status === 'blocked' ? 'in-progress' : 'blocked' });
@@ -339,6 +358,58 @@ async function releaseTask() {
   } catch (e) { alert(e.message); }
 }
 
+// Files selected but not yet uploaded - kept at module scope (not tied to
+// the file input's own state) so a background poll re-rendering the page
+// doesn't lose the pending selection before the person hits Upload.
+let pendingFiles = [];
+
+function fmtBytes(bytes) {
+  if (bytes < 1024) return bytes + ' B';
+  if (bytes < 1024 * 1024) return Math.round(bytes / 1024) + ' KB';
+  return (bytes / (1024 * 1024)).toFixed(1) + ' MB';
+}
+
+function onAttachmentChange(e) {
+  const err = document.getElementById('attachmentError');
+  err.textContent = '';
+  const incoming = Array.from(e.target.files || []);
+  const oversized = incoming.filter(f => f.size > 8 * 1024 * 1024);
+  if (oversized.length) {
+    err.textContent = `${oversized.map(f => f.name).join(', ')} - too large (8MB max), not added`;
+  }
+  const sized = incoming.filter(f => f.size <= 8 * 1024 * 1024);
+  // Selecting again (instead of replacing) adds to the pending list, so
+  // people can build up a batch across more than one file-picker dialog;
+  // de-duped by name+size+lastModified so re-picking the same file twice
+  // doesn't queue it twice.
+  sized.forEach(f => {
+    const dupe = pendingFiles.some(p => p.name === f.name && p.size === f.size && p.lastModified === f.lastModified);
+    if (!dupe) pendingFiles.push(f);
+  });
+  e.target.value = '';
+  renderPendingFiles();
+}
+
+function renderPendingFiles() {
+  const list = document.getElementById('pendingFilesList');
+  const btn = document.getElementById('uploadFilesBtn');
+  if (!list || !btn) return; // not on screen right now (e.g. in review with no upload section)
+  list.innerHTML = pendingFiles.map((f, i) => `
+    <div class="pending-file">
+      <span class="file-name">${esc(f.name)}</span>
+      <span class="file-size mono">${fmtBytes(f.size)}</span>
+      <button type="button" class="ghost" data-remove-pending="${i}">Remove</button>
+    </div>`).join('');
+  list.querySelectorAll('[data-remove-pending]').forEach(b => {
+    b.addEventListener('click', () => {
+      pendingFiles.splice(Number(b.dataset.removePending), 1);
+      renderPendingFiles();
+    });
+  });
+  btn.classList.toggle('hidden', pendingFiles.length === 0);
+  btn.textContent = pendingFiles.length === 1 ? 'Upload file' : `Upload ${pendingFiles.length} files`;
+}
+
 function fileToBase64(file) {
   return new Promise((resolve, reject) => {
     const reader = new FileReader();
@@ -348,26 +419,41 @@ function fileToBase64(file) {
   });
 }
 
-async function onAttachmentChange(e) {
-  const file = e.target.files[0];
-  if (!file) return;
+async function uploadPendingFiles() {
   const err = document.getElementById('attachmentError');
   err.textContent = '';
-  if (file.size > 8 * 1024 * 1024) { err.textContent = 'file too large (8MB max)'; e.target.value = ''; return; }
+  const btn = document.getElementById('uploadFilesBtn');
+  btn.disabled = true;
+  const files = pendingFiles.slice();
   try {
-    const dataBase64 = await fileToBase64(file);
-    const uploadRes = await fetch('/.netlify/functions/attachments', {
-      method: 'POST', headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: file.name, mimeType: file.type || 'application/octet-stream', dataBase64 }),
-    });
-    const uploaded = await uploadRes.json().catch(() => ({}));
-    if (!uploadRes.ok) throw new Error(uploaded.error || 'upload failed');
-    await api('addAttachment', { taskId, attachment: uploaded, userToken: userToken() });
+    for (const file of files) {
+      const dataBase64 = await fileToBase64(file);
+      const uploadRes = await fetch('/.netlify/functions/attachments', {
+        method: 'POST', headers: { 'content-type': 'application/json' },
+        body: JSON.stringify({ filename: file.name, mimeType: file.type || 'application/octet-stream', dataBase64 }),
+      });
+      const uploaded = await uploadRes.json().catch(() => ({}));
+      if (!uploadRes.ok) throw new Error(`${file.name}: ${uploaded.error || 'upload failed'}`);
+      await api('addAttachment', { taskId, attachment: uploaded, userToken: userToken() });
+      // Uploaded successfully - drop it from the pending queue so a later
+      // failure in the batch doesn't re-upload files already saved.
+      pendingFiles = pendingFiles.filter(f => f !== file);
+    }
     await load();
   } catch (ex) {
     err.textContent = ex.message;
-    e.target.value = '';
+    renderPendingFiles();
+  } finally {
+    btn.disabled = false;
   }
+}
+
+async function deleteAttachment(key) {
+  if (!confirm('Delete this file?')) return;
+  try {
+    await api('deleteAttachment', { taskId, key, userToken: userToken() });
+    await load();
+  } catch (e) { alert(e.message); }
 }
 
 let pendingLeadAction = null;

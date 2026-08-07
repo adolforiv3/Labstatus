@@ -20,6 +20,7 @@ import {
   resolveUserToken,
   checkUserPasscode,
 } from "./lib/auth.mjs";
+import { attachmentsStore } from "./lib/stores.mjs";
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -290,6 +291,36 @@ export default withErrorBoundary(async (req) => {
         };
         return next;
       });
+      return json({ tasks: tasks.map(withDerived) });
+    }
+
+    // Removes one attached file from a task's update log - for "too many
+    // files" or "wrong file" cleanup, not a real update-history edit (the
+    // rest of that entry's note/status stays if it had one; if the entry
+    // was attachment-only it's dropped entirely). Also deletes the
+    // underlying blob so it doesn't just linger unreferenced in storage.
+    if (action === "deleteAttachment") {
+      if (!isUser(body)) return json({ error: "passcode required" }, 401);
+      const key = body.key;
+      if (!key) return json({ error: "attachment key required" }, 400);
+
+      let found = false;
+      const tasks = await mutateTasks((tasks) => {
+        const idx = tasks.findIndex((t) => t.id === body.taskId);
+        if (idx === -1) throw new ApiError("task not found", 404);
+        const task = tasks[idx];
+        const entry = task.updates.find((u) => u.attachment && u.attachment.key === key);
+        if (!entry) throw new ApiError("attachment not found", 404);
+        found = true;
+        const next = [...tasks];
+        next[idx] = {
+          ...task,
+          updates: task.updates.filter((u) => !(u.attachment && u.attachment.key === key)),
+          updatedAt: new Date().toISOString(),
+        };
+        return next;
+      });
+      if (found) await attachmentsStore().delete(key).catch(() => {});
       return json({ tasks: tasks.map(withDerived) });
     }
 
