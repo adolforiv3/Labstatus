@@ -290,7 +290,7 @@ function render() {
   if (document.getElementById('completeTaskBtn')) document.getElementById('completeTaskBtn').addEventListener('click', () => requireLead(() => submitAction('completeTask', { adminToken: adminToken() }, true)));
   if (document.getElementById('rejectReviewBtn')) document.getElementById('rejectReviewBtn').addEventListener('click', () => requireLead(() => submitAction('rejectReview', { adminToken: adminToken() })));
   if (document.getElementById('reviewAdminUnlockBtn')) document.getElementById('reviewAdminUnlockBtn').addEventListener('click', () => requireLead(load));
-  if (document.getElementById('releaseBtn')) document.getElementById('releaseBtn').addEventListener('click', releaseTask);
+  if (document.getElementById('releaseBtn')) document.getElementById('releaseBtn').addEventListener('click', () => requireLead(releaseTask));
 
   if (preservedNote) {
     const freshNoteInput = document.getElementById('noteInput');
@@ -318,7 +318,7 @@ async function submitAction(action, extra, isTerminal) {
 async function releaseTask() {
   if (!confirm('Abandon this task with no history record?')) return;
   try {
-    await api('release', { taskId });
+    await api('release', { taskId, adminToken: adminToken() });
     location.href = '/';
   } catch (e) { alert(e.message); }
 }

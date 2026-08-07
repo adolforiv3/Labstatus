@@ -215,8 +215,12 @@ export default withErrorBoundary(async (req) => {
     }
 
     // Abandons a task slot with no history entry - for "claimed the wrong
-    // station" mistakes, not real task completion.
+    // station" mistakes, not real task completion. Lab-admin-only: a
+    // team member can't unilaterally wipe someone's in-progress work
+    // (their own or anyone else's), the same way completeTask/rejectReview
+    // already require admin approval.
     if (action === "release") {
+      if (!isAdmin(body)) return json({ error: "lab admin passcode required to release a task" }, 401);
       const tasks = await mutateTasks((tasks) => {
         if (!tasks.some((t) => t.id === body.taskId)) throw new ApiError("task not found", 404);
         return tasks.filter((t) => t.id !== body.taskId);
