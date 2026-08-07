@@ -642,7 +642,7 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 30000);
 setInterval(() => { if (activeTab === 'board') render(); }, 1000); // live timer tick
-setInterval(refreshBoard, 5000);
+setInterval(refreshBoard, 1000);
 refreshBoard();
 </script>
 </body>
