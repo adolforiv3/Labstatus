@@ -537,13 +537,17 @@ document.getElementById('claimSubmit').addEventListener('click', async () => {
   const err = document.getElementById('claimError');
   err.textContent = '';
   try {
-    await api('claim', {
+    const data = await api('claim', {
       stationId: claimingStationId,
       ownerName: document.getElementById('ownerNameInput').value,
       taskLabel: document.getElementById('taskLabelInput').value,
     });
     hide('claimOverlay');
     await refreshBoard();
+    // Drop the person straight into their new task's dashboard (notes,
+    // file upload, status controls) instead of back at the grid - they
+    // came here to start working on it, not to look at the board again.
+    if (data.created) openTask(data.created.id);
   } catch (e) { err.textContent = e.message; }
 });
 
@@ -808,7 +812,7 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 30000);
 setInterval(() => { if (activeTab === 'board') render(); }, 1000); // live timer tick
-setInterval(refreshBoard, 12000);
+setInterval(refreshBoard, 5000);
 refreshBoard();
 </script>
 </body>

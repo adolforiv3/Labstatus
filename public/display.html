@@ -152,7 +152,7 @@ function tickClock() {
 tickClock();
 setInterval(tickClock, 1000);
 setInterval(render, 1000); // live timer tick
-setInterval(refresh, 10000);
+setInterval(refresh, 2000); // pull the latest claim/status/note state every 2s so the wall display stays effectively live
 refresh();
 </script>
 </body>
