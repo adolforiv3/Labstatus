@@ -281,7 +281,7 @@ function reviewCardHtml(t) {
       <div>
         <div class="review-station">${esc(station ? station.name : t.stationId)}</div>
         <div class="review-task">${esc(t.taskLabel)}</div>
-        <div class="review-owner">${esc(t.ownerName)}</div>
+        <div class="review-owner">${esc(t.ownerName)}${t.kit ? ' · Kit: ' + esc(t.kit) : ''}</div>
       </div>
     </div>
     <div class="review-times">

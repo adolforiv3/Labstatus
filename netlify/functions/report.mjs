@@ -71,6 +71,7 @@ function renderReport(entry, origin) {
     <div class="meta-item"><div class="label">Station</div><div class="value">${esc(entry.stationName)}</div></div>
     <div class="meta-item"><div class="label">Zone</div><div class="value">${esc(entry.zone || "n/a")}</div></div>
     <div class="meta-item"><div class="label">Completed by</div><div class="value">${esc(entry.ownerName)}</div></div>
+    <div class="meta-item"><div class="label">Kit</div><div class="value">${esc(entry.kit || "n/a")}</div></div>
     <div class="meta-item"><div class="label">Started</div><div class="value">${esc(entry.startedAt ? new Date(entry.startedAt).toLocaleString() : "n/a")}</div></div>
     <div class="meta-item"><div class="label">Task time</div><div class="value">${fmtDuration(entry.taskDurationMs)}</div></div>
     <div class="meta-item"><div class="label">Review time</div><div class="value">${fmtDuration(entry.reviewDurationMs)}</div></div>

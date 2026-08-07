@@ -52,7 +52,7 @@ export async function mutateTasks(mutate) {
   return updateJSON(store, TASKS_KEY, async (current) => mutate(current || []));
 }
 
-export function newTask({ id, stationId, ownerName, taskLabel }) {
+export function newTask({ id, stationId, ownerName, taskLabel, kit }) {
   const now = new Date().toISOString();
   return {
     id,
@@ -60,6 +60,7 @@ export function newTask({ id, stationId, ownerName, taskLabel }) {
     status: "in-progress", // in-progress | blocked | review
     ownerName,
     taskLabel,
+    kit,
     taskStartedAt: now,
     taskDurationMs: null, // frozen once the task timer stops (sent to review)
     reviewStartedAt: null,

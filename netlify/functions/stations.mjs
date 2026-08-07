@@ -68,15 +68,17 @@ export default withErrorBoundary(async (req) => {
     if (action === "claim") {
       const ownerName = (body.ownerName || "").trim();
       const taskLabel = (body.taskLabel || "").trim();
+      const kit = (body.kit || "").trim();
       if (!ownerName) return json({ error: "name is required" }, 400);
       if (!taskLabel) return json({ error: "task description is required" }, 400);
+      if (!kit) return json({ error: "kit is required" }, 400);
 
       const stations = await loadStations();
       if (!stations.some((s) => s.id === body.stationId)) throw new ApiError("station not found", 404);
 
       let created = null;
       const tasks = await mutateTasks((tasks) => {
-        created = newTask({ id: crypto.randomUUID(), stationId: body.stationId, ownerName, taskLabel });
+        created = newTask({ id: crypto.randomUUID(), stationId: body.stationId, ownerName, taskLabel, kit });
         return [...tasks, created];
       });
       return json({ tasks: tasks.map(withDerived), created: withDerived(created) });
@@ -199,6 +201,7 @@ export default withErrorBoundary(async (req) => {
           zone: station ? station.zone : null,
           ownerName: task.ownerName,
           taskLabel: task.taskLabel,
+          kit: task.kit,
           taskDurationMs: task.taskDurationMs,
           reviewDurationMs,
           updates,

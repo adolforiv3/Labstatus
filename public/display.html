@@ -50,6 +50,7 @@
   .task-row-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:10px; }
   .owner-name{ font-size:22px; font-weight:800; }
   .task-label{ font-size:16px; color:var(--ink-soft); margin-top:2px; }
+  .kit-tag{ font-size:13px; color:var(--green); font-weight:700; margin-top:4px; }
   .status-badge{
     font-size:13px; font-weight:800; padding:5px 12px; border-radius:var(--r-pill); white-space:nowrap;
     text-transform:uppercase; letter-spacing:.03em; flex-shrink:0;
@@ -138,6 +139,7 @@ function taskRowHtml(t) {
       <div>
         <div class="owner-name">${esc(t.ownerName)}</div>
         <div class="task-label">${esc(t.taskLabel)}</div>
+        ${t.kit ? `<div class="kit-tag">Kit: ${esc(t.kit)}</div>` : ''}
       </div>
       <div class="status-badge ${t.status}">${t.status.replace('-', ' ')}</div>
     </div>

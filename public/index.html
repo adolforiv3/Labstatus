@@ -125,6 +125,7 @@
   .status-badge.blocked{ background:var(--red-bg); color:var(--red); }
   .owner-name{ font-size:16px; font-weight:600; }
   .task-label{ font-size:14px; color:var(--ink-soft); line-height:1.4; }
+  .kit-tag{ font-size:12px; color:var(--teal); font-weight:600; margin-top:2px; }
   .task-row-meta{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--ink-soft); }
   .timer{ font-size:20px; font-weight:700; letter-spacing:-0.01em; }
   .stale-tag{ color:var(--red); font-weight:700; }
@@ -207,7 +208,7 @@
     <div class="table-wrap">
       <table class="history-table" id="historyTable">
         <thead>
-          <tr><th>Completed</th><th>Station</th><th>Person</th><th>Task</th><th>Task time</th><th>Review time</th></tr>
+          <tr><th>Completed</th><th>Station</th><th>Person</th><th>Task</th><th>Kit</th><th>Task time</th><th>Review time</th></tr>
         </thead>
         <tbody id="historyBody"></tbody>
       </table>
@@ -227,6 +228,10 @@
     <div class="field">
       <label>Task</label>
       <textarea id="taskLabelInput" rows="2" placeholder="What are you working on?"></textarea>
+    </div>
+    <div class="field">
+      <label>Kit</label>
+      <input type="text" id="kitInput" placeholder="Which kit are you using?">
     </div>
     <div class="error-msg" id="claimError"></div>
     <div class="modal-actions">
@@ -401,6 +406,7 @@ function taskRowHtml(t) {
       <div>
         <div class="owner-name">${esc(t.ownerName)}</div>
         <div class="task-label">${esc(t.taskLabel)}</div>
+        ${t.kit ? `<div class="kit-tag">Kit: ${esc(t.kit)}</div>` : ''}
       </div>
       <div style="display:flex; flex-direction:column; align-items:flex-end; gap:6px;">
         <div class="status-badge ${t.status}">${t.status.replace('-', ' ')}</div>
@@ -425,6 +431,7 @@ function openClaim(stationId) {
   document.getElementById('claimTitle').textContent = 'New task at ' + (s ? s.name : '');
   document.getElementById('ownerNameInput').value = '';
   document.getElementById('taskLabelInput').value = '';
+  document.getElementById('kitInput').value = '';
   document.getElementById('claimError').textContent = '';
   show('claimOverlay');
   document.getElementById('ownerNameInput').focus();
@@ -437,6 +444,7 @@ document.getElementById('claimSubmit').addEventListener('click', async () => {
       stationId: claimingStationId,
       ownerName: document.getElementById('ownerNameInput').value,
       taskLabel: document.getElementById('taskLabelInput').value,
+      kit: document.getElementById('kitInput').value,
     });
     // Drop the person straight into their new task's dedicated page (notes,
     // file upload, status controls) instead of back at the grid - they
@@ -467,7 +475,7 @@ function updateEntryHtml(u) {
 function renderHistory() {
   const body = document.getElementById('historyBody');
   if (!history.length) {
-    body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--ink-soft);">No completed tasks yet.</td></tr>';
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--ink-soft);">No completed tasks yet.</td></tr>';
     return;
   }
   body.innerHTML = history.map((h, i) => `
@@ -476,6 +484,7 @@ function renderHistory() {
       <td>${esc(h.stationName)}</td>
       <td>${esc(h.ownerName)}</td>
       <td>${esc(h.taskLabel)}</td>
+      <td>${esc(h.kit || '-')}</td>
       <td class="mono">${fmtDuration(h.taskDurationMs)}</td>
       <td class="mono">${fmtDuration(h.reviewDurationMs)}</td>
     </tr>`).join('');
@@ -486,7 +495,7 @@ function renderHistory() {
 function openHistoryDetail(h) {
   document.getElementById('historyDetailTitle').textContent = `${h.stationName} — ${h.taskLabel}`;
   document.getElementById('historyDetailSub').textContent =
-    `${h.ownerName} · task ${fmtDuration(h.taskDurationMs)} · review ${fmtDuration(h.reviewDurationMs)} · completed ${new Date(h.completedAt).toLocaleString()}`;
+    `${h.ownerName} · kit ${h.kit || 'n/a'} · task ${fmtDuration(h.taskDurationMs)} · review ${fmtDuration(h.reviewDurationMs)} · completed ${new Date(h.completedAt).toLocaleString()}`;
   document.getElementById('historyDetailLog').innerHTML = h.updates.length
     ? h.updates.map(updateEntryHtml).join('')
     : '<div class="empty">No update notes.</div>';
