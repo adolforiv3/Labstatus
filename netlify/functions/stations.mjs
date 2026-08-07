@@ -1,7 +1,17 @@
 import { json, withErrorBoundary } from "./lib/http.mjs";
 import { ConcurrentWriteError } from "./lib/occ.mjs";
 import { ZONES } from "./lib/config.mjs";
-import { loadStations, mutateStations, withDerived, loadHistory, appendHistory } from "./lib/state.mjs";
+import {
+  loadStations,
+  mutateStations,
+  loadTasks,
+  mutateTasks,
+  newTask,
+  withDerived,
+  loadHistory,
+  appendHistory,
+  slugify,
+} from "./lib/state.mjs";
 import { newAdminToken, resolveAdminToken, checkBoardAdminPasscode } from "./lib/auth.mjs";
 
 class ApiError extends Error {
@@ -15,19 +25,12 @@ function isAdmin(body) {
   return !!body.adminToken && resolveAdminToken(body.adminToken);
 }
 
-function resetToIdle(station) {
-  return {
-    ...station,
-    status: "idle",
-    ownerName: null,
-    taskLabel: null,
-    taskStartedAt: null,
-    taskDurationMs: null,
-    reviewStartedAt: null,
-    updates: [],
-    helpFlag: false,
-    updatedAt: null,
-  };
+// The zone filter bar shows every config-defined zone plus any custom zone
+// name an admin has actually used on a station, so a newly invented zone
+// shows up without a code change.
+function allZones(stations) {
+  const extra = stations.map((s) => s.zone).filter((z) => z && !ZONES.includes(z));
+  return [...ZONES, ...new Set(extra)];
 }
 
 export default withErrorBoundary(async (req) => {
@@ -39,8 +42,8 @@ export default withErrorBoundary(async (req) => {
       const history = await loadHistory();
       return json({ history });
     }
-    const stations = await loadStations();
-    return json({ stations: stations.map(withDerived), zones: ZONES });
+    const [stations, tasks] = await Promise.all([loadStations(), loadTasks()]);
+    return json({ stations, tasks: tasks.map(withDerived), zones: allZones(stations) });
   }
 
   if (method !== "POST") {
@@ -58,35 +61,25 @@ export default withErrorBoundary(async (req) => {
       return json({ token: newAdminToken() });
     }
 
-    // Claim an idle station: starts the task timer.
+    // Starts a new task slot at a station. Not gated on the station being
+    // "free" - any number of people can claim the same station at once on
+    // separate devices, so this always succeeds as long as the station
+    // exists.
     if (action === "claim") {
       const ownerName = (body.ownerName || "").trim();
       const taskLabel = (body.taskLabel || "").trim();
       if (!ownerName) return json({ error: "name is required" }, 400);
       if (!taskLabel) return json({ error: "task description is required" }, 400);
 
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        if (station.status !== "idle") throw new ApiError("this station is already claimed", 409);
-        const now = new Date().toISOString();
-        const next = [...stations];
-        next[idx] = {
-          ...station,
-          status: "in-progress",
-          ownerName,
-          taskLabel,
-          taskStartedAt: now,
-          taskDurationMs: null,
-          reviewStartedAt: null,
-          updates: [],
-          helpFlag: false,
-          updatedAt: now,
-        };
-        return next;
+      const stations = await loadStations();
+      if (!stations.some((s) => s.id === body.stationId)) throw new ApiError("station not found", 404);
+
+      let created = null;
+      const tasks = await mutateTasks((tasks) => {
+        created = newTask({ id: crypto.randomUUID(), stationId: body.stationId, ownerName, taskLabel });
+        return [...tasks, created];
       });
-      return json({ stations: stations.map(withDerived) });
+      return json({ tasks: tasks.map(withDerived), created: withDerived(created) });
     }
 
     // Periodic status update: a note is always required, so the update log
@@ -98,24 +91,24 @@ export default withErrorBoundary(async (req) => {
       if (!note) return json({ error: "an update note is required" }, 400);
       const nextStatus = body.status === "blocked" ? "blocked" : body.status === "in-progress" ? "in-progress" : null;
 
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        if (station.status !== "in-progress" && station.status !== "blocked") {
-          throw new ApiError("station is not an active task", 400);
+      const tasks = await mutateTasks((tasks) => {
+        const idx = tasks.findIndex((t) => t.id === body.taskId);
+        if (idx === -1) throw new ApiError("task not found", 404);
+        const task = tasks[idx];
+        if (task.status !== "in-progress" && task.status !== "blocked") {
+          throw new ApiError("task is not active", 400);
         }
         const now = new Date().toISOString();
-        const next = [...stations];
+        const next = [...tasks];
         next[idx] = {
-          ...station,
-          status: nextStatus || station.status,
-          updates: [...station.updates, { ts: now, note, status: nextStatus || station.status }],
+          ...task,
+          status: nextStatus || task.status,
+          updates: [...task.updates, { ts: now, note, status: nextStatus || task.status }],
           updatedAt: now,
         };
         return next;
       });
-      return json({ stations: stations.map(withDerived) });
+      return json({ tasks: tasks.map(withDerived) });
     }
 
     // Stops the task timer and starts the review timer - a note is
@@ -125,31 +118,31 @@ export default withErrorBoundary(async (req) => {
       const note = (body.note || "").trim();
       if (!note) return json({ error: "a note is required to send this to review" }, 400);
 
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        if (station.status !== "in-progress" && station.status !== "blocked") {
-          throw new ApiError("station is not an active task", 400);
+      const tasks = await mutateTasks((tasks) => {
+        const idx = tasks.findIndex((t) => t.id === body.taskId);
+        if (idx === -1) throw new ApiError("task not found", 404);
+        const task = tasks[idx];
+        if (task.status !== "in-progress" && task.status !== "blocked") {
+          throw new ApiError("task is not active", 400);
         }
         const now = new Date().toISOString();
-        const taskDurationMs = station.taskStartedAt ? Date.now() - new Date(station.taskStartedAt).getTime() : 0;
-        const next = [...stations];
+        const taskDurationMs = task.taskStartedAt ? Date.now() - new Date(task.taskStartedAt).getTime() : 0;
+        const next = [...tasks];
         next[idx] = {
-          ...station,
+          ...task,
           status: "review",
           taskDurationMs,
           reviewStartedAt: now,
-          updates: [...station.updates, { ts: now, note, status: "review" }],
+          updates: [...task.updates, { ts: now, note, status: "review" }],
           updatedAt: now,
         };
         return next;
       });
-      return json({ stations: stations.map(withDerived) });
+      return json({ tasks: tasks.map(withDerived) });
     }
 
     // Sends a task in review back to in-progress with a note explaining
-    // why - the lab lead's reject path. Resumes the task timer from where
+    // why - the lab admin's reject path. Resumes the task timer from where
     // it left off (rather than restarting at zero) by backdating
     // taskStartedAt by whatever task time had already accumulated.
     if (action === "rejectReview") {
@@ -157,137 +150,161 @@ export default withErrorBoundary(async (req) => {
       const note = (body.note || "").trim();
       if (!note) return json({ error: "a note is required to send this back" }, 400);
 
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        if (station.status !== "review") throw new ApiError("station is not in review", 400);
+      const tasks = await mutateTasks((tasks) => {
+        const idx = tasks.findIndex((t) => t.id === body.taskId);
+        if (idx === -1) throw new ApiError("task not found", 404);
+        const task = tasks[idx];
+        if (task.status !== "review") throw new ApiError("task is not in review", 400);
         const now = new Date();
-        const alreadyElapsed = station.taskDurationMs || 0;
-        const next = [...stations];
+        const alreadyElapsed = task.taskDurationMs || 0;
+        const next = [...tasks];
         next[idx] = {
-          ...station,
+          ...task,
           status: "in-progress",
           taskStartedAt: new Date(now.getTime() - alreadyElapsed).toISOString(),
           taskDurationMs: null,
           reviewStartedAt: null,
-          updates: [...station.updates, { ts: now.toISOString(), note, status: "sent back" }],
+          updates: [...task.updates, { ts: now.toISOString(), note, status: "sent back" }],
           updatedAt: now.toISOString(),
         };
         return next;
       });
-      return json({ stations: stations.map(withDerived) });
+      return json({ tasks: tasks.map(withDerived) });
     }
 
     // Stops the review timer, requires a closing note, logs the full
     // record (task time, review time, every update) to history, and
-    // resets the station back to idle. Lab-lead-only - this is the
-    // approval step, not something the person who did the work signs off
-    // on themselves.
+    // removes the task slot. Lab-admin-only - this is the approval step,
+    // not something the person who did the work signs off on themselves.
     if (action === "completeTask") {
       if (!isAdmin(body)) return json({ error: "lab admin passcode required to approve and complete this task" }, 401);
       const note = (body.note || "").trim();
       if (!note) return json({ error: "a closing note is required to complete this task" }, 400);
 
+      const stations = await loadStations();
       let historyEntry = null;
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        if (station.status !== "review") throw new ApiError("station is not in review", 400);
+      const tasks = await mutateTasks((tasks) => {
+        const idx = tasks.findIndex((t) => t.id === body.taskId);
+        if (idx === -1) throw new ApiError("task not found", 404);
+        const task = tasks[idx];
+        if (task.status !== "review") throw new ApiError("task is not in review", 400);
         const now = new Date().toISOString();
-        const reviewDurationMs = station.reviewStartedAt ? Date.now() - new Date(station.reviewStartedAt).getTime() : 0;
-        const updates = [...station.updates, { ts: now, note, status: "complete" }];
+        const reviewDurationMs = task.reviewStartedAt ? Date.now() - new Date(task.reviewStartedAt).getTime() : 0;
+        const updates = [...task.updates, { ts: now, note, status: "complete" }];
+        const station = stations.find((s) => s.id === task.stationId);
         historyEntry = {
           id: crypto.randomUUID(),
-          stationId: station.id,
-          stationName: station.name,
-          zone: station.zone,
-          ownerName: station.ownerName,
-          taskLabel: station.taskLabel,
-          taskDurationMs: station.taskDurationMs,
+          stationId: task.stationId,
+          stationName: station ? station.name : task.stationId,
+          zone: station ? station.zone : null,
+          ownerName: task.ownerName,
+          taskLabel: task.taskLabel,
+          taskDurationMs: task.taskDurationMs,
           reviewDurationMs,
           updates,
-          startedAt: station.taskStartedAt,
+          startedAt: task.taskStartedAt,
           completedAt: now,
         };
-        const next = [...stations];
-        next[idx] = resetToIdle(station);
-        return next;
+        return tasks.filter((t) => t.id !== body.taskId);
       });
       await appendHistory(historyEntry);
-      return json({ stations: stations.map(withDerived), completed: historyEntry });
+      return json({ tasks: tasks.map(withDerived), completed: historyEntry });
     }
 
-    // Abandons the current claim with no history entry - for "claimed the
-    // wrong station" mistakes, not real task completion.
+    // Abandons a task slot with no history entry - for "claimed the wrong
+    // station" mistakes, not real task completion.
     if (action === "release") {
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const next = [...stations];
-        next[idx] = resetToIdle(stations[idx]);
+      const tasks = await mutateTasks((tasks) => {
+        if (!tasks.some((t) => t.id === body.taskId)) throw new ApiError("task not found", 404);
+        return tasks.filter((t) => t.id !== body.taskId);
+      });
+      return json({ tasks: tasks.map(withDerived) });
+    }
+
+    if (action === "toggleHelp") {
+      const tasks = await mutateTasks((tasks) => {
+        const idx = tasks.findIndex((t) => t.id === body.taskId);
+        if (idx === -1) throw new ApiError("task not found", 404);
+        const next = [...tasks];
+        next[idx] = { ...tasks[idx], helpFlag: !tasks[idx].helpFlag, updatedAt: new Date().toISOString() };
         return next;
       });
-      return json({ stations: stations.map(withDerived) });
+      return json({ tasks: tasks.map(withDerived) });
     }
 
     // Attaches an already-uploaded file (see attachments.mjs, which returns
-    // {key, filename, mimeType, size}) to the update log as its own entry -
-    // separate from addUpdate so a screenshot/file can be dropped in
-    // without also having to write a periodic status note.
+    // {key, filename, mimeType, size}) to a task's update log as its own
+    // entry - separate from addUpdate so a screenshot/file can be dropped
+    // in without also having to write a periodic status note.
     if (action === "addAttachment") {
       const { key, filename, mimeType, size } = body.attachment || {};
       if (!key || !filename) return json({ error: "attachment upload failed" }, 400);
       const note = (body.note || "").trim();
 
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        if (station.status === "idle") throw new ApiError("station is not an active task", 400);
+      const tasks = await mutateTasks((tasks) => {
+        const idx = tasks.findIndex((t) => t.id === body.taskId);
+        if (idx === -1) throw new ApiError("task not found", 404);
+        const task = tasks[idx];
         const now = new Date().toISOString();
-        const next = [...stations];
+        const next = [...tasks];
         next[idx] = {
-          ...station,
+          ...task,
           updates: [
-            ...station.updates,
-            { ts: now, note: note || `Attached ${filename}`, status: station.status, attachment: { key, filename, mimeType, size } },
+            ...task.updates,
+            { ts: now, note: note || `Attached ${filename}`, status: task.status, attachment: { key, filename, mimeType, size } },
           ],
           updatedAt: now,
         };
         return next;
       });
-      return json({ stations: stations.map(withDerived) });
-    }
-
-    if (action === "toggleHelp") {
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        if (station.status === "idle") throw new ApiError("station is not an active task", 400);
-        const next = [...stations];
-        next[idx] = { ...station, helpFlag: !station.helpFlag, updatedAt: new Date().toISOString() };
-        return next;
-      });
-      return json({ stations: stations.map(withDerived) });
+      return json({ tasks: tasks.map(withDerived) });
     }
 
     if (action === "adminForceRelease") {
-      if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === body.stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const next = [...stations];
-        next[idx] = resetToIdle(stations[idx]);
-        return next;
+      if (!isAdmin(body)) return json({ error: "lab admin passcode required" }, 401);
+      const tasks = await mutateTasks((tasks) => {
+        if (!tasks.some((t) => t.id === body.taskId)) throw new ApiError("task not found", 404);
+        return tasks.filter((t) => t.id !== body.taskId);
       });
-      return json({ stations: stations.map(withDerived) });
+      return json({ tasks: tasks.map(withDerived) });
+    }
+
+    if (action === "adminAddStation") {
+      if (!isAdmin(body)) return json({ error: "lab admin passcode required" }, 401);
+      const name = (body.name || "").trim();
+      const zone = (body.zone || "").trim() || "unassigned";
+      if (!name) return json({ error: "station name required" }, 400);
+
+      const stations = await mutateStations((stations) => {
+        let id = slugify(name);
+        if (stations.some((s) => s.id === id)) {
+          let n = 2;
+          while (stations.some((s) => s.id === `${id}-${n}`)) n++;
+          id = `${id}-${n}`;
+        }
+        return [...stations, { id, name, zone }];
+      });
+      return json({ stations, zones: allZones(stations) });
+    }
+
+    // Only removable while no task is currently claimed there - an admin
+    // should force-release any active tasks first, so deleting a station
+    // can never silently drop in-progress work with no history record.
+    if (action === "adminDeleteStation") {
+      if (!isAdmin(body)) return json({ error: "lab admin passcode required" }, 401);
+      const tasks = await loadTasks();
+      if (tasks.some((t) => t.stationId === body.stationId)) {
+        return json({ error: "force-release every active task at this station before deleting it" }, 409);
+      }
+      const stations = await mutateStations((stations) => {
+        if (!stations.some((s) => s.id === body.stationId)) throw new ApiError("station not found", 404);
+        return stations.filter((s) => s.id !== body.stationId);
+      });
+      return json({ stations, zones: allZones(stations) });
     }
 
     if (action === "adminRenameStation") {
-      if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
+      if (!isAdmin(body)) return json({ error: "lab admin passcode required" }, 401);
       const name = (body.name || "").trim();
       if (!name) return json({ error: "station name required" }, 400);
       const stations = await mutateStations((stations) => {
@@ -297,7 +314,7 @@ export default withErrorBoundary(async (req) => {
         next[idx] = { ...stations[idx], name };
         return next;
       });
-      return json({ stations: stations.map(withDerived) });
+      return json({ stations, zones: allZones(stations) });
     }
 
     return json({ error: "unknown action" }, 400);
