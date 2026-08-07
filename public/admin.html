@@ -184,9 +184,9 @@
       </div>
 
       <div class="section">
-        <h2>Tasks by kit</h2>
-        <p class="sub">Which kits show up most in completed work.</p>
-        <div id="kitChart"></div>
+        <h2>Tasks by station</h2>
+        <p class="sub">Which stations show up most in completed work.</p>
+        <div id="stationChart"></div>
       </div>
     </div>
 
@@ -386,7 +386,7 @@ function renderMetrics() {
 
   renderStatusChart(liveByStatus, live.length);
   renderDailyChart();
-  renderKitChart();
+  renderStationChart();
 
   const badge = document.getElementById('reviewBadge');
   const reviewCount = liveByStatus.review;
@@ -478,12 +478,12 @@ function renderDailyChart() {
   el.innerHTML = svgBarChart(bars, { barColor: 'var(--teal)' });
 }
 
-function renderKitChart() {
-  const el = document.getElementById('kitChart');
+function renderStationChart() {
+  const el = document.getElementById('stationChart');
   const counts = {};
   history.forEach(h => {
-    const kit = (h.kit || '').trim() || 'None';
-    counts[kit] = (counts[kit] || 0) + 1;
+    const station = h.stationName || 'Unknown';
+    counts[station] = (counts[station] || 0) + 1;
   });
   const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
   if (!entries.length) {
