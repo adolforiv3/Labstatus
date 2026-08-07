@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Task — Lab Status Board</title>
+<style>
+  :root{
+    --paper:#f5f5f7;
+    --ink:#1d1d1f;
+    --ink-soft:#6e6e73;
+    --teal:#5e5ce6;
+    --teal-bg: rgba(94,92,230,0.1);
+    --amber:#ff9500;
+    --amber-bg: rgba(255,149,0,0.12);
+    --red:#ff3b30;
+    --red-bg: rgba(255,59,48,0.12);
+    --green:#34c759;
+    --green-bg: rgba(52,199,89,0.12);
+    --gray-bg: rgba(0,0,0,0.045);
+    --card:#ffffff;
+    --border: rgba(0,0,0,0.09);
+    --overlay-bg: rgba(0,0,0,0.45);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 6px rgba(0,0,0,0.05);
+    --shadow-lg: 0 16px 48px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08);
+    --r-sm:10px; --r-md:14px; --r-lg:20px; --r-pill:999px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#000000; --ink:#f5f5f7; --ink-soft:#98989d;
+      --teal:#7d7aff; --teal-bg: rgba(125,122,255,0.18);
+      --amber:#ff9f0a; --amber-bg: rgba(255,159,10,0.16);
+      --red:#ff453a; --red-bg: rgba(255,69,58,0.16);
+      --green:#30d158; --green-bg: rgba(48,209,88,0.16);
+      --gray-bg: rgba(255,255,255,0.07);
+      --card:#1c1c1e; --border: rgba(255,255,255,0.12);
+      --overlay-bg: rgba(0,0,0,0.65);
+      --shadow-sm: 0 0 0 1px rgba(255,255,255,0.06);
+      --shadow-lg: 0 0 0 1px rgba(255,255,255,0.08), 0 20px 60px rgba(0,0,0,0.6);
+    }
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--paper); color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased; padding-bottom:60px; }
+  .mono{ font-variant-numeric:tabular-nums; }
+  a{ color:var(--teal); }
+
+  button, a.btn{
+    font-family:inherit; font-size:15px; font-weight:600; border:none; cursor:pointer;
+    border-radius:var(--r-sm); padding:12px 18px; background:var(--card); color:var(--ink); border:1px solid var(--border);
+  }
+  button:active, a.btn:active{ transform:scale(0.98); }
+  button:disabled{ opacity:.5; cursor:default; }
+  button.primary, a.btn.primary{ background:var(--teal); color:#fff; border-color:transparent; }
+  button.danger, a.btn.danger{ background:var(--red); color:#fff; border-color:transparent; }
+  button.ghost, a.btn.ghost{ background:transparent; border-color:var(--border); }
+  button.small{ padding:8px 13px; font-size:13px; }
+  button:focus-visible, a.btn:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  main{ max-width:640px; margin:0 auto; padding:24px 20px 40px; }
+  .back-link{ display:inline-block; font-size:14px; color:var(--ink-soft); text-decoration:none; margin-bottom:18px; }
+
+  .head-card{
+    background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow-sm);
+    padding:24px; margin-bottom:20px; position:relative;
+  }
+  .status-badge{
+    font-size:12px; font-weight:700; padding:5px 12px; border-radius:var(--r-pill); white-space:nowrap;
+    text-transform:uppercase; letter-spacing:.02em; display:inline-block; margin-bottom:10px;
+  }
+  .status-badge.in-progress{ background:var(--green-bg); color:var(--green); }
+  .status-badge.review{ background:var(--amber-bg); color:var(--amber); }
+  .status-badge.blocked{ background:var(--red-bg); color:var(--red); }
+  .station-name{ font-size:14px; color:var(--ink-soft); font-weight:600; text-transform:uppercase; letter-spacing:.03em; }
+  .task-label{ font-size:26px; font-weight:800; letter-spacing:-0.01em; margin:4px 0 2px; }
+  .owner-name{ font-size:16px; color:var(--ink-soft); }
+  .timer-row{ display:flex; gap:24px; margin-top:18px; }
+  .timer-label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; font-weight:700; }
+  .timer{ font-size:38px; font-weight:800; letter-spacing:-0.01em; }
+  .stale-tag{ color:var(--red); font-weight:700; font-size:13px; }
+  .help-toggle-btn{
+    position:absolute; top:20px; right:20px; width:38px; height:38px; border-radius:50%; padding:0;
+    display:flex; align-items:center; justify-content:center; font-size:17px;
+  }
+  .help-toggle-btn.active{ background:var(--red); color:#fff; border-color:transparent; }
+
+  .section{
+    background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg); box-shadow:var(--shadow-sm);
+    padding:22px; margin-bottom:20px;
+  }
+  .section h2{ font-size:16px; margin-bottom:14px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:13px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
+  textarea, input[type=file], input[type=password]{
+    width:100%; font-family:inherit; font-size:16px; background:var(--paper); border:1px solid var(--border);
+    padding:11px 14px; color:var(--ink); border-radius:var(--r-sm);
+  }
+  textarea:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 4px var(--teal-bg); }
+  .error-msg{ color:var(--red); font-size:13px; margin-top:8px; min-height:16px; }
+  .action-row{ display:flex; gap:10px; flex-wrap:wrap; margin-top:14px; }
+  .action-row button{ flex:1; min-width:140px; }
+
+  .updates-log{ border:1px solid var(--border); border-radius:var(--r-sm); max-height:280px; overflow-y:auto; }
+  .updates-log .entry{ padding:12px 14px; border-bottom:1px solid var(--border); font-size:14px; }
+  .updates-log .entry:last-child{ border-bottom:none; }
+  .updates-log .entry .meta{ color:var(--ink-soft); font-size:11px; margin-top:4px; text-transform:uppercase; letter-spacing:.02em; font-weight:600; }
+  .updates-log .empty{ padding:20px; text-align:center; color:var(--ink-soft); font-size:14px; }
+
+  .waiting-notice{ text-align:center; padding:10px 0; }
+  .waiting-notice p{ color:var(--ink-soft); font-size:14px; margin-bottom:14px; }
+
+  .overlay{ position:fixed; inset:0; background:var(--overlay-bg); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .hidden{ display:none !important; }
+  .modal{ position:relative; background:var(--card); border-radius:var(--r-lg); box-shadow:var(--shadow-lg); padding:28px; width:100%; max-width:400px; }
+  .modal h2{ font-size:20px; margin-bottom:6px; }
+  .modal p.sub{ font-size:14px; color:var(--ink-soft); margin-bottom:16px; }
+  .modal-actions{ display:flex; gap:10px; margin-top:18px; }
+  .modal-actions button{ flex:1; }
+  .close-x{ position:absolute; top:14px; right:14px; background:transparent; border:none; font-size:20px; color:var(--ink-soft); padding:4px 8px; }
+
+  .empty-state{ text-align:center; padding:80px 20px; color:var(--ink-soft); font-size:16px; }
+</style>
+</head>
+<body>
+
+<main>
+  <a class="back-link" href="/">&larr; Back to board</a>
+  <div id="content"></div>
+</main>
+
+<div class="overlay hidden" id="leadOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="leadOverlay">&times;</button>
+    <h2>Lab admin passcode</h2>
+    <p class="sub">Approving or sending back a review requires the lab admin passcode.</p>
+    <div class="field">
+      <label>Passcode</label>
+      <input type="password" id="leadPasscodeInput" autocomplete="off">
+    </div>
+    <div class="error-msg" id="leadError"></div>
+    <div class="modal-actions">
+      <button class="ghost" data-close="leadOverlay">Cancel</button>
+      <button class="primary" id="leadSubmit">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/.netlify/functions/stations';
+const params = new URLSearchParams(location.search);
+const taskId = params.get('id');
+let task = null;
+let station = null;
+
+function adminToken() { return sessionStorage.getItem('adminToken'); }
+function setAdminToken(t) { sessionStorage.setItem('adminToken', t); }
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+document.querySelectorAll('[data-close]').forEach(btn => btn.addEventListener('click', () => hide(btn.dataset.close)));
+document.querySelectorAll('.overlay').forEach(o => o.addEventListener('click', (e) => { if (e.target === o) o.classList.add('hidden'); }));
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape') document.querySelectorAll('.overlay:not(.hidden)').forEach(o => o.classList.add('hidden')); });
+
+function esc(s) { return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+function fmtDuration(ms) {
+  if (ms == null) return '--:--';
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+async function api(action, extra) {
+  const res = await fetch(API, { method: 'POST', headers: { 'content-type': 'application/json' }, body: JSON.stringify({ action, ...extra }) });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+async function load() {
+  const res = await fetch(API + '?t=' + Date.now());
+  const data = await res.json();
+  task = data.tasks.find(t => t.id === taskId) || null;
+  station = task ? data.stations.find(s => s.id === task.stationId) : null;
+  render();
+}
+
+function updateEntryHtml(u) {
+  const att = u.attachment
+    ? `<div><a href="/.netlify/functions/attachments?key=${encodeURIComponent(u.attachment.key)}" target="_blank" rel="noopener">📎 ${esc(u.attachment.filename)}</a></div>`
+    : '';
+  return `<div class="entry"><div>${esc(u.note)}</div>${att}<div class="meta">${new Date(u.ts).toLocaleString([], {hour:'2-digit', minute:'2-digit'})} · ${esc(u.status)}</div></div>`;
+}
+
+function render() {
+  const content = document.getElementById('content');
+  if (!task) {
+    content.innerHTML = '<div class="empty-state">This task is no longer active (completed or released). <br><a href="/">Return to the board</a></div>';
+    return;
+  }
+  // Background polling re-renders this whole section every few seconds -
+  // without preserving it, typing a note while a poll lands would wipe out
+  // whatever was half-typed.
+  const noteInputEl = document.getElementById('noteInput');
+  const preservedNote = noteInputEl ? noteInputEl.value : '';
+  const preservedFocus = document.activeElement && document.activeElement.id === 'noteInput';
+
+  const inReview = task.status === 'review';
+  const canReview = inReview && adminToken();
+  const timerMs = inReview ? task.reviewElapsedMs : task.taskElapsedMs;
+  const timerLabel = inReview ? 'Review time' : 'Task time';
+
+  content.innerHTML = `
+    <div class="head-card">
+      <button class="help-toggle-btn ${task.helpFlag ? 'active' : ''}" id="helpBtn" title="Flag for help">!</button>
+      <div class="status-badge ${task.status}">${task.status.replace('-', ' ')}</div>
+      <div class="station-name">${esc(station ? station.name : task.stationId)}</div>
+      <div class="task-label">${esc(task.taskLabel)}</div>
+      <div class="owner-name">${esc(task.ownerName)}</div>
+      <div class="timer-row">
+        <div>
+          <div class="timer-label">${timerLabel}</div>
+          <div class="timer mono">${fmtDuration(timerMs)}</div>
+        </div>
+      </div>
+      ${task.stale ? '<div class="stale-tag" style="margin-top:10px;">STALE - no update in 4+ hours</div>' : ''}
+    </div>
+
+    <div class="section">
+      <h2>Attach a file</h2>
+      <div class="field">
+        <label>Screenshot, .txt, etc. — 8MB max</label>
+        <input type="file" id="attachmentInput">
+      </div>
+      <div class="error-msg" id="attachmentError"></div>
+    </div>
+
+    <div class="section">
+      <h2>${inReview ? 'Closing note (required)' : 'Update note (required)'}</h2>
+      <div class="field">
+        <textarea id="noteInput" rows="3" placeholder="What's the latest?"></textarea>
+      </div>
+      <div class="error-msg" id="taskError"></div>
+      ${
+        !inReview
+          ? `<div class="action-row">
+               <button class="ghost" id="markBlockedBtn">${task.status === 'blocked' ? 'Mark in progress' : 'Mark blocked'}</button>
+               <button class="ghost" id="postUpdateBtn">Post update</button>
+             </div>
+             <div class="action-row">
+               <button class="ghost" id="releaseBtn">Release (abandon)</button>
+               <button class="primary" id="sendReviewBtn">Send to review</button>
+             </div>`
+          : canReview
+            ? `<div class="action-row">
+                 <button class="ghost" id="releaseBtn">Release (abandon)</button>
+                 <button class="danger" id="rejectReviewBtn">Send back</button>
+                 <button class="primary" id="completeTaskBtn">Approve &amp; complete</button>
+               </div>`
+            : `<div class="waiting-notice">
+                 <p>Awaiting lab admin review. Approving or sending this back requires the lab admin passcode.</p>
+                 <div class="action-row">
+                   <button class="ghost" id="releaseBtn">Release (abandon)</button>
+                   <button class="ghost" id="reviewAdminUnlockBtn">I'm the lab admin</button>
+                 </div>
+               </div>`
+      }
+    </div>
+
+    <div class="section">
+      <h2>Update history</h2>
+      <div class="updates-log">
+        ${task.updates.length ? task.updates.slice().reverse().map(updateEntryHtml).join('') : '<div class="empty">No updates yet.</div>'}
+      </div>
+    </div>
+  `;
+
+  document.getElementById('helpBtn').addEventListener('click', async () => {
+    try { await api('toggleHelp', { taskId }); await load(); } catch (e) { alert(e.message); }
+  });
+  document.getElementById('attachmentInput').addEventListener('change', onAttachmentChange);
+  if (document.getElementById('markBlockedBtn')) {
+    document.getElementById('markBlockedBtn').addEventListener('click', () => {
+      submitAction('addUpdate', { status: task.status === 'blocked' ? 'in-progress' : 'blocked' });
+    });
+  }
+  if (document.getElementById('postUpdateBtn')) document.getElementById('postUpdateBtn').addEventListener('click', () => submitAction('addUpdate'));
+  if (document.getElementById('sendReviewBtn')) document.getElementById('sendReviewBtn').addEventListener('click', () => submitAction('sendToReview'));
+  if (document.getElementById('completeTaskBtn')) document.getElementById('completeTaskBtn').addEventListener('click', () => requireLead(() => submitAction('completeTask', { adminToken: adminToken() }, true)));
+  if (document.getElementById('rejectReviewBtn')) document.getElementById('rejectReviewBtn').addEventListener('click', () => requireLead(() => submitAction('rejectReview', { adminToken: adminToken() })));
+  if (document.getElementById('reviewAdminUnlockBtn')) document.getElementById('reviewAdminUnlockBtn').addEventListener('click', () => requireLead(load));
+  if (document.getElementById('releaseBtn')) document.getElementById('releaseBtn').addEventListener('click', releaseTask);
+
+  if (preservedNote) {
+    const freshNoteInput = document.getElementById('noteInput');
+    if (freshNoteInput) {
+      freshNoteInput.value = preservedNote;
+      if (preservedFocus) freshNoteInput.focus();
+    }
+  }
+}
+
+function currentNote() { return document.getElementById('noteInput').value.trim(); }
+
+async function submitAction(action, extra, isTerminal) {
+  const err = document.getElementById('taskError');
+  err.textContent = '';
+  const note = currentNote();
+  if (!note) { err.textContent = 'a note is required'; return; }
+  try {
+    await api(action, { taskId, note, ...extra });
+    if (isTerminal) { location.href = '/'; return; }
+    await load();
+  } catch (e) { err.textContent = e.message; }
+}
+
+async function releaseTask() {
+  if (!confirm('Abandon this task with no history record?')) return;
+  try {
+    await api('release', { taskId });
+    location.href = '/';
+  } catch (e) { alert(e.message); }
+}
+
+function fileToBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
+    reader.onerror = reject;
+    reader.readAsDataURL(file);
+  });
+}
+
+async function onAttachmentChange(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const err = document.getElementById('attachmentError');
+  err.textContent = '';
+  if (file.size > 8 * 1024 * 1024) { err.textContent = 'file too large (8MB max)'; e.target.value = ''; return; }
+  try {
+    const dataBase64 = await fileToBase64(file);
+    const uploadRes = await fetch('/.netlify/functions/attachments', {
+      method: 'POST', headers: { 'content-type': 'application/json' },
+      body: JSON.stringify({ filename: file.name, mimeType: file.type || 'application/octet-stream', dataBase64 }),
+    });
+    const uploaded = await uploadRes.json().catch(() => ({}));
+    if (!uploadRes.ok) throw new Error(uploaded.error || 'upload failed');
+    await api('addAttachment', { taskId, attachment: uploaded });
+    await load();
+  } catch (ex) {
+    err.textContent = ex.message;
+    e.target.value = '';
+  }
+}
+
+let pendingLeadAction = null;
+function requireLead(action) {
+  if (adminToken()) { action(); return; }
+  pendingLeadAction = action;
+  document.getElementById('leadPasscodeInput').value = '';
+  document.getElementById('leadError').textContent = '';
+  show('leadOverlay');
+  document.getElementById('leadPasscodeInput').focus();
+}
+document.getElementById('leadSubmit').addEventListener('click', async () => {
+  const passcode = document.getElementById('leadPasscodeInput').value;
+  const err = document.getElementById('leadError');
+  err.textContent = '';
+  try {
+    const data = await api('adminVerify', { passcode });
+    setAdminToken(data.token);
+    hide('leadOverlay');
+    if (pendingLeadAction) pendingLeadAction();
+  } catch (e) { err.textContent = e.message; }
+});
+document.getElementById('leadPasscodeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') document.getElementById('leadSubmit').click(); });
+
+if (!taskId) {
+  document.getElementById('content').innerHTML = '<div class="empty-state">No task specified. <br><a href="/">Return to the board</a></div>';
+} else {
+  load();
+  setInterval(() => { if (task) load(); }, 3000);
+}
+</script>
+</body>
+</html>

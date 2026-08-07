@@ -236,64 +236,6 @@
   </div>
 </div>
 
-<!-- Task detail / update modal -->
-<div class="overlay hidden" id="taskOverlay">
-  <div class="modal">
-    <button class="close-x" data-close="taskOverlay">&times;</button>
-    <h2 id="taskTitle">Station</h2>
-    <p class="sub" id="taskSub"></p>
-    <div class="updates-log" id="updatesLog"></div>
-    <div class="field">
-      <label>Attach a file (screenshot, .txt, etc. - 8MB max)</label>
-      <input type="file" id="attachmentInput">
-    </div>
-    <div class="error-msg" id="attachmentError"></div>
-    <div class="field">
-      <label id="noteLabel">Update note (required)</label>
-      <textarea id="noteInput" rows="3"></textarea>
-    </div>
-    <div class="error-msg" id="taskError"></div>
-    <div class="modal-actions" id="taskActionsRow1">
-      <button class="ghost" id="markBlockedBtn">Mark blocked</button>
-      <button class="ghost" id="postUpdateBtn">Post update</button>
-    </div>
-    <div class="modal-actions" id="taskActionsRow2">
-      <button class="ghost" id="releaseTaskBtn">Release (abandon)</button>
-      <button class="primary" id="sendReviewBtn">Send to review</button>
-    </div>
-    <div class="hidden" id="reviewWaitingNotice">
-      <p class="sub" style="margin-bottom:0;">Awaiting lab admin review. Approving or sending this back requires the lab admin passcode.</p>
-      <div class="modal-actions">
-        <button class="ghost" id="releaseTaskBtn3">Release (abandon)</button>
-        <button class="ghost" id="reviewAdminUnlockBtn">I'm the lab admin</button>
-      </div>
-    </div>
-    <div class="modal-actions hidden" id="taskActionsReview">
-      <button class="ghost" id="releaseTaskBtn2">Release (abandon)</button>
-      <button class="danger" id="rejectReviewBtn">Send back</button>
-      <button class="primary" id="completeTaskBtn">Approve &amp; complete</button>
-    </div>
-  </div>
-</div>
-
-<!-- Lab admin passcode modal (blocks completing/rejecting a review) -->
-<div class="overlay hidden" id="leadOverlay">
-  <div class="modal">
-    <button class="close-x" data-close="leadOverlay">&times;</button>
-    <h2>Lab admin passcode</h2>
-    <p class="sub">Approving, rejecting, or force-releasing a task requires the lab admin passcode.</p>
-    <div class="field">
-      <label>Passcode</label>
-      <input type="password" id="leadPasscodeInput" autocomplete="off">
-    </div>
-    <div class="error-msg" id="leadError"></div>
-    <div class="modal-actions">
-      <button class="ghost" data-close="leadOverlay">Cancel</button>
-      <button class="primary" id="leadSubmit">Unlock</button>
-    </div>
-  </div>
-</div>
-
 <!-- Admin modal -->
 <div class="overlay hidden" id="adminOverlay">
   <div class="modal">
@@ -364,7 +306,6 @@ let history = [];
 let activeZone = 'all';
 let activeTab = 'board';
 let claimingStationId = null;
-let activeTaskId = null;
 
 function zoneLabel(z) { return ZONE_LABELS[z] || z; }
 
@@ -549,44 +490,17 @@ document.getElementById('claimSubmit').addEventListener('click', async () => {
       ownerName: document.getElementById('ownerNameInput').value,
       taskLabel: document.getElementById('taskLabelInput').value,
     });
-    hide('claimOverlay');
-    await refreshBoard();
-    // Drop the person straight into their new task's dashboard (notes,
+    // Drop the person straight into their new task's dedicated page (notes,
     // file upload, status controls) instead of back at the grid - they
     // came here to start working on it, not to look at the board again.
     if (data.created) openTask(data.created.id);
   } catch (e) { err.textContent = e.message; }
 });
 
-// --- Task detail modal ---
+// Task detail lives on its own page now (task.html), one task at a time,
+// instead of a popup modal here on the board.
 function openTask(taskId) {
-  activeTaskId = taskId;
-  const t = state.tasks.find(t => t.id === taskId);
-  if (!t) return;
-  const s = state.stations.find(s => s.id === t.stationId);
-  document.getElementById('taskTitle').textContent = s ? s.name : t.stationId;
-  document.getElementById('taskSub').textContent = `${t.ownerName} · ${t.taskLabel}`;
-  document.getElementById('noteInput').value = '';
-  document.getElementById('taskError').textContent = '';
-
-  const log = document.getElementById('updatesLog');
-  log.innerHTML = t.updates.length ? t.updates.slice().reverse().map(updateEntryHtml).join('') : '<div class="empty">No updates yet.</div>';
-
-  const inReview = t.status === 'review';
-  const canReview = inReview && adminToken();
-  document.getElementById('taskActionsRow1').classList.toggle('hidden', inReview);
-  document.getElementById('taskActionsRow2').classList.toggle('hidden', inReview);
-  // The approve/reject controls are only ever shown to someone already
-  // authenticated as lab admin on this device - a regular team member sees
-  // a waiting notice instead, so there's nothing to even attempt clicking
-  // through, not just a passcode prompt in the way.
-  document.getElementById('taskActionsReview').classList.toggle('hidden', !canReview);
-  document.getElementById('reviewWaitingNotice').classList.toggle('hidden', !(inReview && !canReview));
-  document.getElementById('noteLabel').textContent = inReview ? 'Closing note (required)' : 'Update note (required)';
-  document.getElementById('markBlockedBtn').textContent = t.status === 'blocked' ? 'Mark in progress' : 'Mark blocked';
-  document.getElementById('attachmentInput').value = '';
-  document.getElementById('attachmentError').textContent = '';
-  show('taskOverlay');
+  location.href = '/task.html?id=' + encodeURIComponent(taskId);
 }
 
 function updateEntryHtml(u) {
@@ -599,105 +513,6 @@ function updateEntryHtml(u) {
       ${att}
       <div class="meta">${new Date(u.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${u.status}</div>
     </div>`;
-}
-
-function fileToBase64(file) {
-  return new Promise((resolve, reject) => {
-    const reader = new FileReader();
-    reader.onload = () => resolve(String(reader.result).split(',')[1] || '');
-    reader.onerror = reject;
-    reader.readAsDataURL(file);
-  });
-}
-
-document.getElementById('attachmentInput').addEventListener('change', async (e) => {
-  const file = e.target.files[0];
-  if (!file) return;
-  const err = document.getElementById('attachmentError');
-  err.textContent = '';
-  if (file.size > 8 * 1024 * 1024) { err.textContent = 'file too large (8MB max)'; e.target.value = ''; return; }
-  try {
-    const dataBase64 = await fileToBase64(file);
-    const uploadRes = await fetch('/.netlify/functions/attachments', {
-      method: 'POST',
-      headers: { 'content-type': 'application/json' },
-      body: JSON.stringify({ filename: file.name, mimeType: file.type || 'application/octet-stream', dataBase64 }),
-    });
-    const uploaded = await uploadRes.json().catch(() => ({}));
-    if (!uploadRes.ok) throw new Error(uploaded.error || 'upload failed');
-    await api('addAttachment', { taskId: activeTaskId, attachment: uploaded });
-    e.target.value = '';
-    await refreshBoard();
-    openTask(activeTaskId);
-  } catch (ex) {
-    err.textContent = ex.message;
-    e.target.value = '';
-  }
-});
-
-function currentNote() {
-  return document.getElementById('noteInput').value.trim();
-}
-
-document.getElementById('postUpdateBtn').addEventListener('click', () => submitTaskAction('addUpdate'));
-document.getElementById('markBlockedBtn').addEventListener('click', () => {
-  const t = state.tasks.find(t => t.id === activeTaskId);
-  const nextStatus = t.status === 'blocked' ? 'in-progress' : 'blocked';
-  submitTaskAction('addUpdate', { status: nextStatus });
-});
-document.getElementById('sendReviewBtn').addEventListener('click', () => submitTaskAction('sendToReview'));
-document.getElementById('completeTaskBtn').addEventListener('click', () => requireLead(() => submitTaskAction('completeTask', { adminToken: adminToken() })));
-document.getElementById('rejectReviewBtn').addEventListener('click', () => requireLead(() => submitTaskAction('rejectReview', { adminToken: adminToken() })));
-document.getElementById('releaseTaskBtn').addEventListener('click', releaseTask);
-document.getElementById('releaseTaskBtn2').addEventListener('click', releaseTask);
-document.getElementById('releaseTaskBtn3').addEventListener('click', releaseTask);
-document.getElementById('reviewAdminUnlockBtn').addEventListener('click', () => requireLead(() => openTask(activeTaskId)));
-
-async function submitTaskAction(action, extra) {
-  const err = document.getElementById('taskError');
-  err.textContent = '';
-  const note = currentNote();
-  if (!note) { err.textContent = 'a note is required'; return; }
-  try {
-    await api(action, { taskId: activeTaskId, note, ...extra });
-    hide('taskOverlay');
-    await refreshBoard();
-  } catch (e) { err.textContent = e.message; }
-}
-
-// --- Lab admin gate (approve/reject/force-release) ---
-let pendingLeadAction = null;
-function requireLead(action) {
-  if (adminToken()) { action(); return; }
-  pendingLeadAction = action;
-  document.getElementById('leadPasscodeInput').value = '';
-  document.getElementById('leadError').textContent = '';
-  show('leadOverlay');
-  document.getElementById('leadPasscodeInput').focus();
-}
-document.getElementById('leadSubmit').addEventListener('click', async () => {
-  const passcode = document.getElementById('leadPasscodeInput').value;
-  const err = document.getElementById('leadError');
-  err.textContent = '';
-  try {
-    const data = await api('adminVerify', { passcode });
-    setAdminToken(data.token);
-    hide('leadOverlay');
-    if (pendingLeadAction) pendingLeadAction();
-  } catch (e) { err.textContent = e.message; }
-});
-document.getElementById('leadPasscodeInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('leadSubmit').click();
-});
-
-async function releaseTask() {
-  if (!confirm('Abandon this task with no history record?')) return;
-  const err = document.getElementById('taskError');
-  try {
-    await api('release', { taskId: activeTaskId });
-    hide('taskOverlay');
-    await refreshBoard();
-  } catch (e) { err.textContent = e.message; }
 }
 
 // --- Admin ---
