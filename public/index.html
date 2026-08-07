@@ -1,0 +1,588 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Lab Status Board</title>
+<style>
+  :root{
+    --paper:#f5f5f7;
+    --ink:#1d1d1f;
+    --ink-soft:#6e6e73;
+    --teal:#5e5ce6;
+    --teal-dark:#4a48c4;
+    --teal-bg: rgba(94,92,230,0.1);
+    --amber:#ff9500;
+    --amber-bg: rgba(255,149,0,0.12);
+    --red:#ff3b30;
+    --red-bg: rgba(255,59,48,0.12);
+    --green:#34c759;
+    --green-bg: rgba(52,199,89,0.12);
+    --gray-bg: rgba(0,0,0,0.045);
+    --card:#ffffff;
+    --border: rgba(0,0,0,0.09);
+    --overlay-bg: rgba(0,0,0,0.45);
+    --shadow-sm: 0 1px 2px rgba(0,0,0,0.04), 0 1px 6px rgba(0,0,0,0.05);
+    --shadow-md: 0 4px 16px rgba(0,0,0,0.08), 0 1px 3px rgba(0,0,0,0.06);
+    --shadow-lg: 0 16px 48px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08);
+    --r-sm:10px; --r-md:14px; --r-lg:20px; --r-pill:999px;
+    font-family: -apple-system, BlinkMacSystemFont, "SF Pro Display", "SF Pro Text", "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  }
+  @media (prefers-color-scheme: dark){
+    :root{
+      --paper:#000000;
+      --ink:#f5f5f7;
+      --ink-soft:#98989d;
+      --teal:#7d7aff;
+      --teal-dark:#a5a3ff;
+      --teal-bg: rgba(125,122,255,0.18);
+      --amber:#ff9f0a;
+      --amber-bg: rgba(255,159,10,0.16);
+      --red:#ff453a;
+      --red-bg: rgba(255,69,58,0.16);
+      --green:#30d158;
+      --green-bg: rgba(48,209,88,0.16);
+      --gray-bg: rgba(255,255,255,0.07);
+      --card:#1c1c1e;
+      --border: rgba(255,255,255,0.12);
+      --overlay-bg: rgba(0,0,0,0.65);
+      --shadow-sm: 0 0 0 1px rgba(255,255,255,0.06);
+      --shadow-md: 0 0 0 1px rgba(255,255,255,0.06), 0 8px 24px rgba(0,0,0,0.5);
+      --shadow-lg: 0 0 0 1px rgba(255,255,255,0.08), 0 20px 60px rgba(0,0,0,0.6);
+    }
+  }
+  *{box-sizing:border-box; margin:0; padding:0;}
+  body{ background:var(--paper); color:var(--ink); min-height:100vh; -webkit-font-smoothing:antialiased; padding-bottom:60px; }
+  .mono{ font-variant-numeric:tabular-nums; }
+  header.top{
+    display:flex; justify-content:space-between; align-items:center; gap:16px;
+    padding:24px 24px 16px; max-width:1400px; margin:0 auto; flex-wrap:wrap;
+  }
+  .brand-eyebrow{ font-size:13px; letter-spacing:.02em; color:var(--teal); font-weight:600; }
+  .brand-title{ font-size:32px; font-weight:700; margin-top:2px; letter-spacing:-0.02em; }
+  .header-actions{ display:flex; gap:10px; align-items:center; }
+  .clock{ font-size:15px; color:var(--ink-soft); }
+  main{ max-width:1400px; margin:0 auto; padding:0 24px; }
+
+  button{
+    font-family:inherit; font-size:15px; font-weight:600; border:none; cursor:pointer;
+    border-radius:var(--r-sm); padding:10px 16px; transition:transform .1s ease, opacity .15s ease;
+    background:var(--card); color:var(--ink); border:1px solid var(--border);
+  }
+  button:active{ transform:scale(0.97); }
+  button:disabled{ opacity:.5; cursor:default; }
+  button.primary{ background:var(--teal); color:#fff; border-color:transparent; }
+  button.danger{ background:var(--red); color:#fff; border-color:transparent; }
+  button.ghost{ background:transparent; border-color:var(--border); }
+  button.small{ padding:6px 11px; font-size:13px; }
+  button:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
+
+  .chipbar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
+  .chip{
+    padding:8px 16px; border-radius:var(--r-pill); background:var(--card); border:1px solid var(--border);
+    font-size:14px; font-weight:600; color:var(--ink-soft); cursor:pointer;
+  }
+  .chip.active{ background:var(--teal); color:#fff; border-color:transparent; }
+
+  .grid{
+    display:grid; grid-template-columns:repeat(auto-fill, minmax(280px, 1fr)); gap:16px;
+  }
+  .card{
+    background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg);
+    box-shadow:var(--shadow-sm); padding:20px; cursor:pointer; position:relative;
+    display:flex; flex-direction:column; gap:10px; min-height:180px;
+  }
+  .card.status-idle{ background:var(--gray-bg); }
+  .card.status-in-progress{ box-shadow:0 0 0 2px var(--green), var(--shadow-sm); }
+  .card.status-qa{ box-shadow:0 0 0 2px var(--amber), var(--shadow-sm); }
+  .card.status-blocked{ box-shadow:0 0 0 2px var(--red), var(--shadow-sm); }
+  .card.help-flag{ animation:pulse-border 1.1s ease-in-out infinite; }
+  @keyframes pulse-border{
+    0%,100%{ box-shadow:0 0 0 2px var(--red), 0 0 0 2px var(--red), var(--shadow-sm); }
+    50%{ box-shadow:0 0 0 6px var(--red-bg), 0 0 0 2px var(--red), var(--shadow-md); }
+  }
+  .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
+  .station-name{ font-size:19px; font-weight:700; letter-spacing:-0.01em; }
+  .zone-tag{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; font-weight:600; margin-top:2px; }
+  .status-badge{
+    font-size:12px; font-weight:700; padding:5px 10px; border-radius:var(--r-pill); white-space:nowrap;
+    text-transform:uppercase; letter-spacing:.02em;
+  }
+  .status-badge.idle{ background:var(--gray-bg); color:var(--ink-soft); }
+  .status-badge.in-progress{ background:var(--green-bg); color:var(--green); }
+  .status-badge.qa{ background:var(--amber-bg); color:var(--amber); }
+  .status-badge.blocked{ background:var(--red-bg); color:var(--red); }
+  .owner-name{ font-size:17px; font-weight:600; }
+  .task-label{ font-size:15px; color:var(--ink-soft); line-height:1.4; flex:1; }
+  .team-label{ font-size:12px; color:var(--ink-soft); }
+  .idle-hint{ font-size:15px; color:var(--ink-soft); flex:1; display:flex; align-items:center; justify-content:center; }
+  .card-meta{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--ink-soft); }
+  .stale-tag{ color:var(--red); font-weight:700; }
+  .help-btn{
+    position:absolute; top:14px; right:14px; width:34px; height:34px; border-radius:50%;
+    display:flex; align-items:center; justify-content:center; font-size:16px; padding:0;
+    background:var(--card); border:1px solid var(--border);
+  }
+  .help-btn.active{ background:var(--red); color:#fff; border-color:transparent; }
+
+  .overlay{
+    position:fixed; inset:0; background:var(--overlay-bg); display:flex; align-items:center; justify-content:center;
+    padding:20px; z-index:50;
+  }
+  .hidden{ display:none !important; }
+  .modal{
+    background:var(--card); border-radius:var(--r-lg); box-shadow:var(--shadow-lg); padding:28px;
+    width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+  }
+  .modal h2{ font-size:21px; margin-bottom:6px; letter-spacing:-0.01em; }
+  .modal p.sub{ font-size:14px; color:var(--ink-soft); margin-bottom:18px; }
+  .field{ margin-bottom:14px; }
+  .field label{ display:block; font-size:13px; font-weight:600; color:var(--ink-soft); margin-bottom:6px; }
+  input[type=text], input[type=password], select, textarea{
+    width:100%; font-family:inherit; font-size:16px; background:var(--paper); border:1px solid var(--border);
+    padding:11px 14px; color:var(--ink); border-radius:var(--r-sm);
+  }
+  input:focus, select:focus, textarea:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 4px var(--teal-bg); }
+  .status-picker{ display:flex; gap:8px; flex-wrap:wrap; }
+  .status-picker button{ flex:1; min-width:80px; }
+  .status-picker button.selected{ background:var(--teal); color:#fff; border-color:transparent; }
+  .modal-actions{ display:flex; gap:10px; margin-top:20px; }
+  .modal-actions button{ flex:1; }
+  .error-msg{ color:var(--red); font-size:13px; margin-top:8px; min-height:16px; }
+  .close-x{ position:absolute; top:16px; right:16px; background:transparent; border:none; font-size:20px; color:var(--ink-soft); padding:4px 8px; }
+
+  .empty-state{ text-align:center; padding:60px 20px; color:var(--ink-soft); font-size:16px; }
+</style>
+</head>
+<body>
+
+<header class="top">
+  <div>
+    <div class="brand-eyebrow">LAB STATUS BOARD</div>
+    <div class="brand-title">Live Station View</div>
+  </div>
+  <div class="header-actions">
+    <span class="clock mono" id="clock"></span>
+    <button class="ghost small" id="adminBtn">Admin</button>
+  </div>
+</header>
+
+<main>
+  <div class="chipbar" id="zoneChips"></div>
+  <div class="grid" id="grid"></div>
+</main>
+
+<!-- Team passcode modal -->
+<div class="overlay hidden" id="passcodeOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="passcodeOverlay">&times;</button>
+    <h2 id="passcodeTitle">Enter team passcode</h2>
+    <p class="sub" id="passcodeSub">Needed once per shift to claim or update this station.</p>
+    <div class="field">
+      <label>Passcode</label>
+      <input type="password" id="passcodeInput" autocomplete="off">
+    </div>
+    <div class="error-msg" id="passcodeError"></div>
+    <div class="modal-actions">
+      <button class="ghost" data-close="passcodeOverlay">Cancel</button>
+      <button class="primary" id="passcodeSubmit">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Claim/update modal -->
+<div class="overlay hidden" id="claimOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="claimOverlay">&times;</button>
+    <h2 id="claimTitle">Claim station</h2>
+    <p class="sub" id="claimSub"></p>
+    <div class="field">
+      <label>Your name</label>
+      <input type="text" id="ownerNameInput">
+    </div>
+    <div class="field">
+      <label>Task</label>
+      <textarea id="taskLabelInput" rows="2"></textarea>
+    </div>
+    <div class="field">
+      <label>Status</label>
+      <div class="status-picker" id="statusPicker">
+        <button type="button" data-status="in-progress">In Progress</button>
+        <button type="button" data-status="qa">QA</button>
+        <button type="button" data-status="blocked">Blocked</button>
+      </div>
+    </div>
+    <div class="field">
+      <label>ETA (optional)</label>
+      <input type="text" id="etaInput" placeholder="e.g. 3:30pm">
+    </div>
+    <div class="error-msg" id="claimError"></div>
+    <div class="modal-actions">
+      <button class="ghost" id="releaseBtn">Release</button>
+      <button class="primary" id="claimSubmit">Save</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin modal -->
+<div class="overlay hidden" id="adminOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="adminOverlay">&times;</button>
+    <h2>Admin</h2>
+    <div id="adminGate">
+      <p class="sub">Enter the board admin passcode.</p>
+      <div class="field">
+        <label>Admin passcode</label>
+        <input type="password" id="adminPasscodeInput" autocomplete="off">
+      </div>
+      <div class="error-msg" id="adminError"></div>
+      <div class="modal-actions">
+        <button class="ghost" data-close="adminOverlay">Cancel</button>
+        <button class="primary" id="adminSubmit">Unlock</button>
+      </div>
+    </div>
+    <div id="adminPanel" class="hidden">
+      <p class="sub">Reassign a station's team, force-release it, or set a team's passcode.</p>
+      <div class="field">
+        <label>Station</label>
+        <select id="adminStationSelect"></select>
+      </div>
+      <div class="field">
+        <label>Assign to team</label>
+        <select id="adminTeamSelect"></select>
+      </div>
+      <div class="modal-actions">
+        <button class="ghost small" id="adminReassignBtn">Reassign</button>
+        <button class="danger small" id="adminForceReleaseBtn">Force release</button>
+      </div>
+      <hr style="margin:20px 0; border:none; border-top:1px solid var(--border);">
+      <div class="field">
+        <label>Team</label>
+        <select id="adminPasscodeTeamSelect"></select>
+      </div>
+      <div class="field">
+        <label>New passcode</label>
+        <input type="text" id="adminNewPasscodeInput">
+      </div>
+      <button class="primary small" id="adminSetPasscodeBtn">Set passcode</button>
+      <div class="error-msg" id="adminPanelError"></div>
+    </div>
+  </div>
+</div>
+
+<script>
+const API = '/.netlify/functions/stations';
+const ZONE_LABELS = { offload: 'Offload', config: 'Config', 'script-testing': 'Script Testing', desk: 'Desk' };
+let state = { stations: [], teams: [], zones: [] };
+let activeZone = 'all';
+let claimingStationId = null;
+let selectedStatus = 'in-progress';
+let pendingPasscodeTeamId = null;
+let pendingPasscodeThen = null;
+
+function teamToken(teamId) { return sessionStorage.getItem('teamToken:' + teamId); }
+function setTeamToken(teamId, token) { sessionStorage.setItem('teamToken:' + teamId, token); }
+function adminToken() { return sessionStorage.getItem('adminToken'); }
+function setAdminToken(token) { sessionStorage.setItem('adminToken', token); }
+
+function show(id) { document.getElementById(id).classList.remove('hidden'); }
+function hide(id) { document.getElementById(id).classList.add('hidden'); }
+
+document.querySelectorAll('[data-close]').forEach(btn => {
+  btn.addEventListener('click', () => hide(btn.dataset.close));
+});
+
+function fmtElapsed(iso) {
+  if (!iso) return '';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return mins + 'm ago';
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h + 'h ' + m + 'm ago';
+}
+
+function teamName(id) {
+  const t = state.teams.find(t => t.id === id);
+  return t ? t.name : id || 'Unassigned';
+}
+
+async function api(action, extra) {
+  const res = await fetch(API, {
+    method: 'POST',
+    headers: { 'content-type': 'application/json' },
+    body: JSON.stringify({ action, ...extra }),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || 'request failed');
+  return data;
+}
+
+async function refresh() {
+  try {
+    const res = await fetch(API + '?t=' + Date.now());
+    const data = await res.json();
+    state.stations = data.stations;
+    state.teams = data.teams;
+    state.zones = data.zones;
+    render();
+  } catch (e) {
+    console.error('refresh failed', e);
+  }
+}
+
+function render() {
+  renderZoneChips();
+  const grid = document.getElementById('grid');
+  const visible = state.stations.filter(s => activeZone === 'all' || s.zone === activeZone);
+  if (!visible.length) {
+    grid.innerHTML = '<div class="empty-state">No stations in this zone.</div>';
+    return;
+  }
+  grid.innerHTML = visible.map(cardHtml).join('');
+  grid.querySelectorAll('.card').forEach(el => {
+    el.addEventListener('click', (e) => {
+      if (e.target.closest('.help-btn')) return;
+      openClaim(el.dataset.id);
+    });
+  });
+  grid.querySelectorAll('.help-btn').forEach(el => {
+    el.addEventListener('click', (e) => {
+      e.stopPropagation();
+      toggleHelp(el.dataset.id);
+    });
+  });
+}
+
+function renderZoneChips() {
+  const bar = document.getElementById('zoneChips');
+  const zones = ['all', ...state.zones];
+  bar.innerHTML = zones.map(z =>
+    `<div class="chip ${z === activeZone ? 'active' : ''}" data-zone="${z}">${z === 'all' ? 'All Zones' : (ZONE_LABELS[z] || z)}</div>`
+  ).join('');
+  bar.querySelectorAll('.chip').forEach(el => {
+    el.addEventListener('click', () => { activeZone = el.dataset.zone; render(); });
+  });
+}
+
+function esc(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function cardHtml(s) {
+  const isIdle = s.status === 'idle';
+  const classes = ['card', 'status-' + s.status, s.helpFlag ? 'help-flag' : ''].join(' ');
+  return `
+  <div class="${classes}" data-id="${s.id}">
+    ${!isIdle ? `<button class="help-btn ${s.helpFlag ? 'active' : ''}" data-id="${s.id}" title="Flag for help">!</button>` : ''}
+    <div class="card-top">
+      <div>
+        <div class="station-name">${esc(s.name)}</div>
+        <div class="zone-tag">${ZONE_LABELS[s.zone] || s.zone}</div>
+      </div>
+      <div class="status-badge ${s.status}">${s.status.replace('-', ' ')}</div>
+    </div>
+    ${isIdle
+      ? `<div class="idle-hint">Tap to claim &middot; ${esc(teamName(s.assignedTeamId))}</div>`
+      : `
+        <div class="owner-name">${esc(s.ownerName || '')}</div>
+        <div class="task-label">${esc(s.taskLabel || '')}</div>
+        <div class="team-label">${esc(teamName(s.assignedTeamId))}${s.eta ? ' &middot; ETA ' + esc(s.eta) : ''}</div>
+        <div class="card-meta">
+          <span class="mono">${fmtElapsed(s.claimedAt)}</span>
+          ${s.stale ? '<span class="stale-tag">STALE</span>' : ''}
+        </div>
+      `}
+  </div>`;
+}
+
+function toggleHelp(stationId) {
+  const s = state.stations.find(s => s.id === stationId);
+  withTeamAccess(s, async (auth) => {
+    await api('toggleHelp', { stationId, ...auth });
+    await refresh();
+  });
+}
+
+function withTeamAccess(station, then) {
+  const tok = teamToken(station.assignedTeamId);
+  if (adminToken()) { then({ adminToken: adminToken() }); return; }
+  if (tok) { then({ teamToken: tok }); return; }
+  pendingPasscodeTeamId = station.assignedTeamId;
+  pendingPasscodeThen = then;
+  document.getElementById('passcodeTitle').textContent = 'Enter passcode for ' + teamName(station.assignedTeamId);
+  document.getElementById('passcodeSub').textContent = 'Needed once per shift to claim or update this station.';
+  document.getElementById('passcodeError').textContent = '';
+  document.getElementById('passcodeInput').value = '';
+  show('passcodeOverlay');
+  document.getElementById('passcodeInput').focus();
+}
+
+document.getElementById('passcodeSubmit').addEventListener('click', async () => {
+  const passcode = document.getElementById('passcodeInput').value;
+  const err = document.getElementById('passcodeError');
+  err.textContent = '';
+  try {
+    const data = await api('verifyTeamPasscode', { teamId: pendingPasscodeTeamId, passcode });
+    setTeamToken(pendingPasscodeTeamId, data.token);
+    hide('passcodeOverlay');
+    if (pendingPasscodeThen) pendingPasscodeThen({ teamToken: data.token });
+  } catch (e) {
+    err.textContent = e.message;
+  }
+});
+document.getElementById('passcodeInput').addEventListener('keydown', (e) => {
+  if (e.key === 'Enter') document.getElementById('passcodeSubmit').click();
+});
+
+function openClaim(stationId) {
+  const s = state.stations.find(s => s.id === stationId);
+  if (!s) return;
+  claimingStationId = stationId;
+  withTeamAccess(s, () => {
+    document.getElementById('claimTitle').textContent = (s.status === 'idle' ? 'Claim ' : 'Update ') + s.name;
+    document.getElementById('claimSub').textContent = teamName(s.assignedTeamId);
+    document.getElementById('ownerNameInput').value = s.ownerName || '';
+    document.getElementById('taskLabelInput').value = s.taskLabel || '';
+    document.getElementById('etaInput').value = s.eta || '';
+    document.getElementById('claimError').textContent = '';
+    selectedStatus = s.status !== 'idle' ? s.status : 'in-progress';
+    updateStatusPicker();
+    document.getElementById('releaseBtn').style.display = s.status === 'idle' ? 'none' : '';
+    show('claimOverlay');
+  });
+}
+
+function updateStatusPicker() {
+  document.querySelectorAll('#statusPicker button').forEach(b => {
+    b.classList.toggle('selected', b.dataset.status === selectedStatus);
+  });
+}
+document.querySelectorAll('#statusPicker button').forEach(b => {
+  b.addEventListener('click', () => { selectedStatus = b.dataset.status; updateStatusPicker(); });
+});
+
+function currentAuth(station) {
+  if (adminToken()) return { adminToken: adminToken() };
+  return { teamToken: teamToken(station.assignedTeamId) };
+}
+
+document.getElementById('claimSubmit').addEventListener('click', async () => {
+  const s = state.stations.find(s => s.id === claimingStationId);
+  const err = document.getElementById('claimError');
+  err.textContent = '';
+  try {
+    const payload = {
+      stationId: claimingStationId,
+      ownerName: document.getElementById('ownerNameInput').value,
+      taskLabel: document.getElementById('taskLabelInput').value,
+      status: selectedStatus,
+      eta: document.getElementById('etaInput').value,
+      ...currentAuth(s),
+    };
+    await api(s.status === 'idle' ? 'claim' : 'update', payload);
+    hide('claimOverlay');
+    await refresh();
+  } catch (e) {
+    err.textContent = e.message;
+  }
+});
+
+document.getElementById('releaseBtn').addEventListener('click', async () => {
+  const s = state.stations.find(s => s.id === claimingStationId);
+  const err = document.getElementById('claimError');
+  try {
+    await api('release', { stationId: claimingStationId, ...currentAuth(s) });
+    hide('claimOverlay');
+    await refresh();
+  } catch (e) {
+    err.textContent = e.message;
+  }
+});
+
+// --- Admin ---
+document.getElementById('adminBtn').addEventListener('click', () => {
+  document.getElementById('adminError').textContent = '';
+  document.getElementById('adminPasscodeInput').value = '';
+  if (adminToken()) {
+    openAdminPanel();
+  } else {
+    show('adminGate');
+    document.getElementById('adminGate').classList.remove('hidden');
+    document.getElementById('adminPanel').classList.add('hidden');
+  }
+  show('adminOverlay');
+});
+
+document.getElementById('adminSubmit').addEventListener('click', async () => {
+  const passcode = document.getElementById('adminPasscodeInput').value;
+  const err = document.getElementById('adminError');
+  err.textContent = '';
+  try {
+    const data = await api('adminVerify', { passcode });
+    setAdminToken(data.token);
+    openAdminPanel();
+  } catch (e) {
+    err.textContent = e.message;
+  }
+});
+
+function openAdminPanel() {
+  document.getElementById('adminGate').classList.add('hidden');
+  document.getElementById('adminPanel').classList.remove('hidden');
+  const stationSel = document.getElementById('adminStationSelect');
+  stationSel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
+  const teamOptions = '<option value="">Unassigned</option>' + state.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
+  document.getElementById('adminTeamSelect').innerHTML = teamOptions;
+  document.getElementById('adminPasscodeTeamSelect').innerHTML = state.teams.map(t => `<option value="${t.id}">${esc(t.name)}${t.hasPasscode ? '' : ' (no passcode set)'}</option>`).join('');
+}
+
+document.getElementById('adminReassignBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    await api('adminReassign', {
+      adminToken: adminToken(),
+      stationId: document.getElementById('adminStationSelect').value,
+      teamId: document.getElementById('adminTeamSelect').value,
+    });
+    await refresh();
+    openAdminPanel();
+  } catch (e) { err.textContent = e.message; }
+});
+
+document.getElementById('adminForceReleaseBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    await api('adminForceRelease', { adminToken: adminToken(), stationId: document.getElementById('adminStationSelect').value });
+    await refresh();
+  } catch (e) { err.textContent = e.message; }
+});
+
+document.getElementById('adminSetPasscodeBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    const teamId = document.getElementById('adminPasscodeTeamSelect').value;
+    const team = state.teams.find(t => t.id === teamId);
+    await api('adminSetTeamPasscode', {
+      adminToken: adminToken(),
+      teamId,
+      name: team ? team.name : teamId,
+      passcode: document.getElementById('adminNewPasscodeInput').value,
+    });
+    document.getElementById('adminNewPasscodeInput').value = '';
+    await refresh();
+    openAdminPanel();
+  } catch (e) { err.textContent = e.message; }
+});
+
+function tickClock() {
+  document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+}
+tickClock();
+setInterval(tickClock, 30000);
+setInterval(refresh, 12000);
+refresh();
+</script>
+</body>
+</html>
