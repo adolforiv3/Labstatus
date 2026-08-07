@@ -16,3 +16,9 @@ export const ZONES = ["offload", "config", "script-testing", "desk"];
 
 export const STALE_MS = 4 * 60 * 60 * 1000; // 4 hours, flags a card as stale
 export const HISTORY_LIMIT = 500; // most recent completed tasks kept in the log
+
+// Gentle nudge, not the stale warning above: if a task's had no update in
+// this long, the reminder scheduled function pushes its owner a "still
+// working on this?" notification - then waits this same interval again
+// before repeating, rather than pinging every run of the schedule.
+export const REMINDER_MS = 60 * 60 * 1000; // 1 hour
