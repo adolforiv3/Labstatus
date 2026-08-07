@@ -261,6 +261,13 @@
       <button class="ghost" id="releaseTaskBtn">Release (abandon)</button>
       <button class="primary" id="sendReviewBtn">Send to review</button>
     </div>
+    <div class="hidden" id="reviewWaitingNotice">
+      <p class="sub" style="margin-bottom:0;">Awaiting lab admin review. Approving or sending this back requires the lab admin passcode.</p>
+      <div class="modal-actions">
+        <button class="ghost" id="releaseTaskBtn3">Release (abandon)</button>
+        <button class="ghost" id="reviewAdminUnlockBtn">I'm the lab admin</button>
+      </div>
+    </div>
     <div class="modal-actions hidden" id="taskActionsReview">
       <button class="ghost" id="releaseTaskBtn2">Release (abandon)</button>
       <button class="danger" id="rejectReviewBtn">Send back</button>
@@ -566,9 +573,15 @@ function openTask(taskId) {
   log.innerHTML = t.updates.length ? t.updates.slice().reverse().map(updateEntryHtml).join('') : '<div class="empty">No updates yet.</div>';
 
   const inReview = t.status === 'review';
+  const canReview = inReview && adminToken();
   document.getElementById('taskActionsRow1').classList.toggle('hidden', inReview);
   document.getElementById('taskActionsRow2').classList.toggle('hidden', inReview);
-  document.getElementById('taskActionsReview').classList.toggle('hidden', !inReview);
+  // The approve/reject controls are only ever shown to someone already
+  // authenticated as lab admin on this device - a regular team member sees
+  // a waiting notice instead, so there's nothing to even attempt clicking
+  // through, not just a passcode prompt in the way.
+  document.getElementById('taskActionsReview').classList.toggle('hidden', !canReview);
+  document.getElementById('reviewWaitingNotice').classList.toggle('hidden', !(inReview && !canReview));
   document.getElementById('noteLabel').textContent = inReview ? 'Closing note (required)' : 'Update note (required)';
   document.getElementById('markBlockedBtn').textContent = t.status === 'blocked' ? 'Mark in progress' : 'Mark blocked';
   document.getElementById('attachmentInput').value = '';
@@ -637,6 +650,8 @@ document.getElementById('completeTaskBtn').addEventListener('click', () => requi
 document.getElementById('rejectReviewBtn').addEventListener('click', () => requireLead(() => submitTaskAction('rejectReview', { adminToken: adminToken() })));
 document.getElementById('releaseTaskBtn').addEventListener('click', releaseTask);
 document.getElementById('releaseTaskBtn2').addEventListener('click', releaseTask);
+document.getElementById('releaseTaskBtn3').addEventListener('click', releaseTask);
+document.getElementById('reviewAdminUnlockBtn').addEventListener('click', () => requireLead(() => openTask(activeTaskId)));
 
 async function submitTaskAction(action, extra) {
   const err = document.getElementById('taskError');
