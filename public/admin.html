@@ -84,6 +84,26 @@
   .stat-value{ font-size:26px; font-weight:800; letter-spacing:-0.01em; }
   .stat-label{ font-size:12px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.03em; font-weight:700; margin-top:2px; }
 
+  .tabbar{ display:flex; gap:8px; margin-bottom:20px; flex-wrap:wrap; }
+  .tab{
+    padding:9px 16px; border-radius:var(--r-pill); background:var(--card); border:1px solid var(--border);
+    font-size:14px; font-weight:600; color:var(--ink-soft); cursor:pointer; display:flex; align-items:center; gap:6px;
+  }
+  .tab.active{ background:var(--teal); color:#fff; border-color:transparent; }
+  .tab-badge{
+    background:var(--red); color:#fff; font-size:11px; font-weight:800; min-width:18px; height:18px; padding:0 5px;
+    border-radius:var(--r-pill); display:flex; align-items:center; justify-content:center;
+  }
+  .tab.active .tab-badge{ background:rgba(255,255,255,0.3); }
+  .tab-panel.hidden{ display:none !important; }
+
+  .chart-legend{ display:flex; gap:16px; flex-wrap:wrap; margin-top:12px; font-size:13px; color:var(--ink-soft); }
+  .chart-legend .dot{ width:10px; height:10px; border-radius:50%; display:inline-block; margin-right:6px; vertical-align:middle; }
+  .chart-legend b{ color:var(--ink); }
+  .stacked-bar{ display:flex; width:100%; height:22px; border-radius:var(--r-sm); overflow:hidden; background:var(--gray-bg); }
+  .stacked-bar div{ height:100%; }
+  .bar-chart-labels{ display:flex; justify-content:space-between; font-size:11px; color:var(--ink-soft); margin-top:6px; }
+
   .gate{ max-width:400px; margin:60px auto; text-align:center; }
   .gate .field{ text-align:left; }
 
@@ -137,59 +157,92 @@
   </div>
 
   <div id="adminView" class="hidden">
-    <div class="section">
-      <h2>Metrics</h2>
-      <p class="sub">Live snapshot across every station.</p>
-      <div class="stat-grid" id="statGrid"></div>
+    <div class="tabbar">
+      <div class="tab active" data-tab="metrics">Metrics</div>
+      <div class="tab" data-tab="reviews">Pending Reviews <span class="tab-badge hidden" id="reviewBadge">0</span></div>
+      <div class="tab" data-tab="stations">Stations</div>
+      <div class="tab" data-tab="history">History</div>
     </div>
 
-    <div class="section">
-      <h2>Pending reviews</h2>
-      <p class="sub">Every task currently waiting on lab admin approval, across all stations.</p>
-      <div id="reviewList"></div>
+    <div class="tab-panel" id="tab-metrics">
+      <div class="section">
+        <h2>Metrics</h2>
+        <p class="sub">Live snapshot across every station.</p>
+        <div class="stat-grid" id="statGrid"></div>
+      </div>
+
+      <div class="section">
+        <h2>Live status breakdown</h2>
+        <p class="sub">What every active task is doing right now.</p>
+        <div id="statusChart"></div>
+      </div>
+
+      <div class="section">
+        <h2>Completed tasks — last 7 days</h2>
+        <p class="sub">How many tasks wrapped up per day.</p>
+        <div id="dailyChart"></div>
+      </div>
+
+      <div class="section">
+        <h2>Tasks by kit</h2>
+        <p class="sub">Which kits show up most in completed work.</p>
+        <div id="kitChart"></div>
+      </div>
     </div>
 
-    <div class="section">
-      <h2>Stations</h2>
-      <p class="sub">Add, rename, force-release, or delete a station.</p>
-      <div class="field">
-        <label>New station name</label>
-        <input type="text" id="adminNewStationName" placeholder="e.g. Desk Zone 3">
+    <div class="tab-panel hidden" id="tab-reviews">
+      <div class="section">
+        <h2>Pending reviews</h2>
+        <p class="sub">Every task currently waiting on lab admin approval, across all stations.</p>
+        <div id="reviewList"></div>
       </div>
-      <div class="field">
-        <label>Zone</label>
-        <input type="text" id="adminNewStationZone" placeholder="e.g. desk">
-      </div>
-      <button class="primary small" id="adminAddStationBtn">Add station</button>
-
-      <hr class="divider">
-
-      <div class="field">
-        <label>Station</label>
-        <select id="adminStationSelect"></select>
-      </div>
-      <div class="field" style="margin-top:14px;">
-        <button class="danger small" id="adminForceReleaseBtn">Force release all tasks</button>
-      </div>
-      <div class="field">
-        <label>Rename this station</label>
-        <input type="text" id="adminStationRenameInput">
-      </div>
-      <button class="ghost small" id="adminRenameStationBtn">Rename station</button>
-      <button class="danger small" id="adminDeleteStationBtn" style="margin-top:10px;">Delete station</button>
-      <div class="error-msg" id="adminPanelError"></div>
     </div>
 
-    <div class="section">
-      <h2>History</h2>
-      <p class="sub">Every completed task. Click a row for the full note timeline and a downloadable report.</p>
-      <div class="table-wrap">
-        <table class="history-table" id="historyTable">
-          <thead>
-            <tr><th>Completed</th><th>Station</th><th>Person</th><th>Task</th><th>Kit</th><th>Task time</th><th>Review time</th></tr>
-          </thead>
-          <tbody id="historyBody"></tbody>
-        </table>
+    <div class="tab-panel hidden" id="tab-stations">
+      <div class="section">
+        <h2>Stations</h2>
+        <p class="sub">Add, rename, force-release, or delete a station.</p>
+        <div class="field">
+          <label>New station name</label>
+          <input type="text" id="adminNewStationName" placeholder="e.g. Desk Zone 3">
+        </div>
+        <div class="field">
+          <label>Zone</label>
+          <input type="text" id="adminNewStationZone" placeholder="e.g. desk">
+        </div>
+        <button class="primary small" id="adminAddStationBtn">Add station</button>
+
+        <hr class="divider">
+
+        <div class="field">
+          <label>Station</label>
+          <select id="adminStationSelect"></select>
+        </div>
+        <div class="field" style="margin-top:14px;">
+          <button class="danger small" id="adminForceReleaseBtn">Force release all tasks</button>
+        </div>
+        <div class="field">
+          <label>Rename this station</label>
+          <input type="text" id="adminStationRenameInput">
+        </div>
+        <button class="ghost small" id="adminRenameStationBtn">Rename station</button>
+        <button class="danger small" id="adminDeleteStationBtn" style="margin-top:10px;">Delete station</button>
+        <div class="error-msg" id="adminPanelError"></div>
+      </div>
+    </div>
+
+    <div class="tab-panel hidden" id="tab-history">
+      <div class="section">
+        <h2>History</h2>
+        <p class="sub">Every completed task. Click a row for the full note timeline and a downloadable report.</p>
+        <div class="table-wrap">
+          <table class="history-table" id="historyTable">
+            <thead>
+              <tr><th>Completed</th><th>Station</th><th>Person</th><th>Task</th><th>Kit</th><th>Task time</th><th>Review time</th></tr>
+            </thead>
+            <tbody id="historyBody"></tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>
@@ -263,6 +316,15 @@ async function enterAdminView() {
   setInterval(refresh, 3000);
 }
 
+// --- Tabs ---
+document.querySelectorAll('.tab').forEach(el => {
+  el.addEventListener('click', () => {
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t === el));
+    document.querySelectorAll('.tab-panel').forEach(p => p.classList.add('hidden'));
+    document.getElementById('tab-' + el.dataset.tab).classList.remove('hidden');
+  });
+});
+
 async function refresh() {
   try {
     const [boardRes, historyRes] = await Promise.all([
@@ -322,6 +384,91 @@ function renderMetrics() {
       <div class="stat-value mono">${t.value}</div>
       <div class="stat-label">${esc(t.label)}</div>
     </div>`).join('');
+
+  renderStatusChart(liveByStatus, live.length);
+  renderDailyChart();
+  renderKitChart();
+
+  const badge = document.getElementById('reviewBadge');
+  const reviewCount = liveByStatus.review;
+  badge.textContent = reviewCount;
+  badge.classList.toggle('hidden', reviewCount === 0);
+}
+
+function renderStatusChart(byStatus, total) {
+  const el = document.getElementById('statusChart');
+  if (!total) {
+    el.innerHTML = '<div class="empty-hint">No active tasks right now.</div>';
+    return;
+  }
+  const segments = [
+    { key: 'in-progress', label: 'In progress', color: 'var(--green)' },
+    { key: 'blocked', label: 'Blocked', color: 'var(--red)' },
+    { key: 'review', label: 'In review', color: 'var(--amber)' },
+  ];
+  const bar = segments
+    .filter(s => byStatus[s.key] > 0)
+    .map(s => `<div style="width:${(byStatus[s.key] / total * 100).toFixed(1)}%; background:${s.color};"></div>`)
+    .join('');
+  const legend = segments
+    .map(s => `<span><span class="dot" style="background:${s.color};"></span>${s.label}: <b>${byStatus[s.key]}</b></span>`)
+    .join('');
+  el.innerHTML = `<div class="stacked-bar">${bar}</div><div class="chart-legend">${legend}</div>`;
+}
+
+// Simple dependency-free bar chart built as inline SVG - no chart library
+// in this project, and this is the only place that needs one.
+function svgBarChart(bars, { height = 140, barColor = 'var(--teal)' } = {}) {
+  const max = Math.max(1, ...bars.map(b => b.value));
+  const barWidth = 100 / bars.length;
+  const bodyHeight = height - 24;
+  const rects = bars.map((b, i) => {
+    const h = (b.value / max) * (bodyHeight - 8);
+    const x = i * barWidth;
+    const y = bodyHeight - h;
+    return `
+      <rect x="${x + barWidth * 0.15}%" y="${y}" width="${barWidth * 0.7}%" height="${h}" rx="4" fill="${barColor}"></rect>
+      <text x="${x + barWidth * 0.5}%" y="${y - 6}" text-anchor="middle" font-size="11" font-weight="700" fill="var(--ink)">${b.value}</text>
+      <text x="${x + barWidth * 0.5}%" y="${height - 6}" text-anchor="middle" font-size="10" fill="var(--ink-soft)">${esc(b.label)}</text>
+    `;
+  }).join('');
+  return `<svg width="100%" height="${height}" viewBox="0 0 400 ${height}" preserveAspectRatio="none" style="overflow:visible;">${rects}</svg>`;
+}
+
+function renderDailyChart() {
+  const el = document.getElementById('dailyChart');
+  const days = [];
+  for (let i = 6; i >= 0; i--) {
+    const d = new Date();
+    d.setDate(d.getDate() - i);
+    days.push(d);
+  }
+  const counts = days.map(d => {
+    const key = d.toISOString().slice(0, 10);
+    return history.filter(h => h.completedAt && h.completedAt.slice(0, 10) === key).length;
+  });
+  if (!history.length) {
+    el.innerHTML = '<div class="empty-hint">No completed tasks yet.</div>';
+    return;
+  }
+  const bars = days.map((d, i) => ({ label: d.toLocaleDateString([], { weekday: 'short' }), value: counts[i] }));
+  el.innerHTML = svgBarChart(bars, { barColor: 'var(--teal)' });
+}
+
+function renderKitChart() {
+  const el = document.getElementById('kitChart');
+  const counts = {};
+  history.forEach(h => {
+    const kit = (h.kit || '').trim() || 'None';
+    counts[kit] = (counts[kit] || 0) + 1;
+  });
+  const entries = Object.entries(counts).sort((a, b) => b[1] - a[1]).slice(0, 6);
+  if (!entries.length) {
+    el.innerHTML = '<div class="empty-hint">No completed tasks yet.</div>';
+    return;
+  }
+  const bars = entries.map(([label, value]) => ({ label, value }));
+  el.innerHTML = svgBarChart(bars, { barColor: 'var(--amber)' });
 }
 
 function renderReviews() {
