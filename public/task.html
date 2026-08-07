@@ -228,10 +228,14 @@ function render() {
   }
   // Background polling re-renders this whole section every few seconds -
   // without preserving it, typing a note while a poll lands would wipe out
-  // whatever was half-typed.
+  // whatever was half-typed, and scrolling through the update history (or
+  // the page itself) would keep getting yanked back to the top mid-scroll.
   const noteInputEl = document.getElementById('noteInput');
   const preservedNote = noteInputEl ? noteInputEl.value : '';
   const preservedFocus = document.activeElement && document.activeElement.id === 'noteInput';
+  const logEl = document.querySelector('.updates-log');
+  const preservedLogScroll = logEl ? logEl.scrollTop : 0;
+  const preservedPageScroll = window.scrollY;
 
   const inReview = task.status === 'review';
   const canReview = inReview && adminToken();
@@ -334,6 +338,10 @@ function render() {
       if (preservedFocus) freshNoteInput.focus();
     }
   }
+
+  const freshLogEl = document.querySelector('.updates-log');
+  if (freshLogEl) freshLogEl.scrollTop = preservedLogScroll;
+  window.scrollTo(0, preservedPageScroll);
 }
 
 function currentNote() { return document.getElementById('noteInput').value.trim(); }
