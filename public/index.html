@@ -77,13 +77,6 @@
   button.small, a.btn.small{ padding:6px 11px; font-size:13px; }
   button:focus-visible, a.btn:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
 
-  .tabbar{ display:flex; gap:8px; margin-bottom:18px; }
-  .tab{
-    padding:9px 18px; border-radius:var(--r-pill); background:var(--card); border:1px solid var(--border);
-    font-size:14px; font-weight:600; color:var(--ink-soft); cursor:pointer;
-  }
-  .tab.active{ background:var(--teal); color:#fff; border-color:transparent; }
-
   .chipbar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
   .chip{
     padding:8px 16px; border-radius:var(--r-pill); background:var(--card); border:1px solid var(--border);
@@ -170,13 +163,6 @@
 
   .empty-state{ text-align:center; padding:60px 20px; color:var(--ink-soft); font-size:16px; }
 
-  table.history-table{ width:100%; border-collapse:collapse; background:var(--card); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow-sm); }
-  table.history-table th, table.history-table td{ text-align:left; padding:12px 14px; border-bottom:1px solid var(--border); font-size:14px; }
-  table.history-table th{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); background:var(--gray-bg); }
-  table.history-table tr:last-child td{ border-bottom:none; }
-  table.history-table tr{ cursor:pointer; }
-  .table-wrap{ overflow-x:auto; border-radius:var(--r-lg); }
-  hr.divider{ margin:20px 0; border:none; border-top:1px solid var(--border); }
 </style>
 </head>
 <body>
@@ -194,25 +180,9 @@
 </header>
 
 <main>
-  <div class="tabbar">
-    <div class="tab active" data-tab="board">Board</div>
-    <div class="tab" data-tab="history">History</div>
-  </div>
-
   <div id="boardView">
     <div class="chipbar" id="zoneChips"></div>
     <div class="grid" id="grid"></div>
-  </div>
-
-  <div id="historyView" class="hidden">
-    <div class="table-wrap">
-      <table class="history-table" id="historyTable">
-        <thead>
-          <tr><th>Completed</th><th>Station</th><th>Person</th><th>Task</th><th>Kit</th><th>Task time</th><th>Review time</th></tr>
-        </thead>
-        <tbody id="historyBody"></tbody>
-      </table>
-    </div>
   </div>
 </main>
 
@@ -230,8 +200,8 @@
       <textarea id="taskLabelInput" rows="2" placeholder="What are you working on?"></textarea>
     </div>
     <div class="field">
-      <label>Kit</label>
-      <input type="text" id="kitInput" placeholder="Which kit are you using?">
+      <label>Kit (optional)</label>
+      <input type="text" id="kitInput" placeholder="Which kit are you using? (leave blank if none)">
     </div>
     <div class="error-msg" id="claimError"></div>
     <div class="modal-actions">
@@ -259,26 +229,11 @@
   </div>
 </div>
 
-<!-- History detail modal -->
-<div class="overlay hidden" id="historyDetailOverlay">
-  <div class="modal">
-    <button class="close-x" data-close="historyDetailOverlay">&times;</button>
-    <h2 id="historyDetailTitle">Task</h2>
-    <p class="sub" id="historyDetailSub"></p>
-    <div class="updates-log" id="historyDetailLog"></div>
-    <div class="modal-actions">
-      <a class="btn primary" id="historyDetailDownload" href="#" style="text-align:center; text-decoration:none; display:block;">Download report</a>
-    </div>
-  </div>
-</div>
-
 <script>
 const API = '/.netlify/functions/stations';
 const ZONE_LABELS = { offload: 'Offload', config: 'Config', 'script-testing': 'Script Testing', desk: 'Desk', unassigned: 'Unassigned' };
 let state = { stations: [], tasks: [], zones: [] };
-let history = [];
 let activeZone = 'all';
-let activeTab = 'board';
 let claimingStationId = null;
 
 function zoneLabel(z) { return ZONE_LABELS[z] || z; }
@@ -325,14 +280,6 @@ function fmtDuration(ms) {
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
 }
 
-function fmtAgo(iso) {
-  if (!iso) return '';
-  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
-  if (mins < 60) return mins + 'm ago';
-  const h = Math.floor(mins / 60), m = mins % 60;
-  return h + 'h ' + m + 'm ago';
-}
-
 async function api(action, extra) {
   const res = await fetch(API, {
     method: 'POST',
@@ -354,26 +301,6 @@ async function refreshBoard() {
     render();
   } catch (e) { console.error('refresh failed', e); }
 }
-
-async function refreshHistory() {
-  try {
-    const res = await fetch(API + '?history=1&t=' + Date.now());
-    const data = await res.json();
-    history = data.history;
-    renderHistory();
-  } catch (e) { console.error('history refresh failed', e); }
-}
-
-// --- Tabs ---
-document.querySelectorAll('.tab').forEach(el => {
-  el.addEventListener('click', () => {
-    activeTab = el.dataset.tab;
-    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === activeTab));
-    document.getElementById('boardView').classList.toggle('hidden', activeTab !== 'board');
-    document.getElementById('historyView').classList.toggle('hidden', activeTab !== 'history');
-    if (activeTab === 'history') refreshHistory();
-  });
-});
 
 // --- Board render ---
 function renderZoneChips() {
@@ -514,56 +441,12 @@ function openTask(taskId) {
   location.href = '/task.html?id=' + encodeURIComponent(taskId);
 }
 
-function updateEntryHtml(u) {
-  const att = u.attachment
-    ? `<div><a href="/.netlify/functions/attachments?key=${encodeURIComponent(u.attachment.key)}" target="_blank" rel="noopener">📎 ${esc(u.attachment.filename)}</a></div>`
-    : '';
-  return `
-    <div class="entry">
-      <div>${esc(u.note)}</div>
-      ${att}
-      <div class="meta">${new Date(u.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${u.status}</div>
-    </div>`;
-}
-
-// --- History ---
-function renderHistory() {
-  const body = document.getElementById('historyBody');
-  if (!history.length) {
-    body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--ink-soft);">No completed tasks yet.</td></tr>';
-    return;
-  }
-  body.innerHTML = history.map((h, i) => `
-    <tr data-idx="${i}">
-      <td>${fmtAgo(h.completedAt)}</td>
-      <td>${esc(h.stationName)}</td>
-      <td>${esc(h.ownerName)}</td>
-      <td>${esc(h.taskLabel)}</td>
-      <td>${esc(h.kit || '-')}</td>
-      <td class="mono">${fmtDuration(h.taskDurationMs)}</td>
-      <td class="mono">${fmtDuration(h.reviewDurationMs)}</td>
-    </tr>`).join('');
-  body.querySelectorAll('tr[data-idx]').forEach(row => {
-    row.addEventListener('click', () => openHistoryDetail(history[Number(row.dataset.idx)]));
-  });
-}
-function openHistoryDetail(h) {
-  document.getElementById('historyDetailTitle').textContent = `${h.stationName} — ${h.taskLabel}`;
-  document.getElementById('historyDetailSub').textContent =
-    `${h.ownerName} · kit ${h.kit || 'n/a'} · task ${fmtDuration(h.taskDurationMs)} · review ${fmtDuration(h.reviewDurationMs)} · completed ${new Date(h.completedAt).toLocaleString()}`;
-  document.getElementById('historyDetailLog').innerHTML = h.updates.length
-    ? h.updates.map(updateEntryHtml).join('')
-    : '<div class="empty">No update notes.</div>';
-  document.getElementById('historyDetailDownload').href = '/.netlify/functions/report?id=' + encodeURIComponent(h.id);
-  show('historyDetailOverlay');
-}
-
 function tickClock() {
   document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 tickClock();
 setInterval(tickClock, 30000);
-setInterval(() => { if (activeTab === 'board') render(); }, 1000); // live timer tick
+setInterval(render, 1000); // live timer tick
 setInterval(refreshBoard, 1000);
 refreshBoard();
 </script>

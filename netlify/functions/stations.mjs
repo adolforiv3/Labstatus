@@ -94,7 +94,6 @@ export default withErrorBoundary(async (req) => {
       const kit = (body.kit || "").trim();
       if (!ownerName) return json({ error: "name is required" }, 400);
       if (!taskLabel) return json({ error: "task description is required" }, 400);
-      if (!kit) return json({ error: "kit is required" }, 400);
 
       const stations = await loadStations();
       if (!stations.some((s) => s.id === body.stationId)) throw new ApiError("station not found", 404);

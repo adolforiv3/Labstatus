@@ -86,6 +86,30 @@
 
   .gate{ max-width:400px; margin:60px auto; text-align:center; }
   .gate .field{ text-align:left; }
+
+  table.history-table{ width:100%; border-collapse:collapse; }
+  table.history-table th, table.history-table td{ text-align:left; padding:10px 12px; border-bottom:1px solid var(--border); font-size:14px; }
+  table.history-table th{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); background:var(--gray-bg); }
+  table.history-table tr:last-child td{ border-bottom:none; }
+  table.history-table tr{ cursor:pointer; }
+  .table-wrap{ overflow-x:auto; border-radius:var(--r-md); border:1px solid var(--border); }
+
+  .overlay{ position:fixed; inset:0; background:rgba(0,0,0,0.45); display:flex; align-items:center; justify-content:center; padding:20px; z-index:50; }
+  .modal{ position:relative; background:var(--card); border-radius:var(--r-lg); box-shadow:0 16px 48px rgba(0,0,0,0.16), 0 2px 8px rgba(0,0,0,0.08); padding:28px; width:100%; max-width:480px; max-height:85vh; overflow-y:auto; }
+  .modal h2{ font-size:20px; margin-bottom:6px; }
+  .modal .sub{ font-size:14px; color:var(--ink-soft); margin-bottom:16px; }
+  .modal-actions{ display:flex; gap:10px; margin-top:18px; }
+  .modal-actions a.btn{
+    flex:1; text-align:center; text-decoration:none; display:block; padding:10px 16px; border-radius:var(--r-sm);
+    background:var(--teal); color:#fff; font-weight:600; font-size:15px;
+  }
+  .close-x{ position:absolute; top:14px; right:14px; background:transparent; border:none; font-size:20px; color:var(--ink-soft); padding:4px 8px; cursor:pointer; }
+  .updates-log{ border:1px solid var(--border); border-radius:var(--r-sm); max-height:280px; overflow-y:auto; }
+  .updates-log .entry{ padding:10px 12px; border-bottom:1px solid var(--border); font-size:14px; }
+  .updates-log .entry:last-child{ border-bottom:none; }
+  .updates-log .entry .meta{ color:var(--ink-soft); font-size:11px; margin-top:4px; text-transform:uppercase; letter-spacing:.02em; font-weight:600; }
+  .updates-log .empty{ padding:16px; text-align:center; color:var(--ink-soft); font-size:14px; }
+  .hidden{ display:none !important; }
 </style>
 </head>
 <body>
@@ -155,10 +179,33 @@
       <button class="danger small" id="adminDeleteStationBtn" style="margin-top:10px;">Delete station</button>
       <div class="error-msg" id="adminPanelError"></div>
     </div>
+
+    <div class="section">
+      <h2>History</h2>
+      <p class="sub">Every completed task. Click a row for the full note timeline and a downloadable report.</p>
+      <div class="table-wrap">
+        <table class="history-table" id="historyTable">
+          <thead>
+            <tr><th>Completed</th><th>Station</th><th>Person</th><th>Task</th><th>Kit</th><th>Task time</th><th>Review time</th></tr>
+          </thead>
+          <tbody id="historyBody"></tbody>
+        </table>
+      </div>
+    </div>
   </div>
 </main>
 
-<style>.hidden{ display:none !important; }</style>
+<div class="overlay hidden" id="historyDetailOverlay">
+  <div class="modal">
+    <button class="close-x" id="historyDetailClose">&times;</button>
+    <h2 id="historyDetailTitle">Task</h2>
+    <p class="sub" id="historyDetailSub"></p>
+    <div class="updates-log" id="historyDetailLog"></div>
+    <div class="modal-actions">
+      <a class="btn" id="historyDetailDownload" href="#">Download report</a>
+    </div>
+  </div>
+</div>
 
 <script>
 const API = '/.netlify/functions/stations';
@@ -174,6 +221,19 @@ function fmtDuration(ms) {
   const h = Math.floor(totalSec / 3600), m = Math.floor((totalSec % 3600) / 60), s = totalSec % 60;
   const pad = (n) => String(n).padStart(2, '0');
   return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+function fmtAgo(iso) {
+  if (!iso) return '';
+  const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
+  if (mins < 60) return mins + 'm ago';
+  const h = Math.floor(mins / 60), m = mins % 60;
+  return h + 'h ' + m + 'm ago';
+}
+function updateEntryHtml(u) {
+  const att = u.attachment
+    ? `<div><a href="/.netlify/functions/attachments?key=${encodeURIComponent(u.attachment.key)}" target="_blank" rel="noopener">📎 ${esc(u.attachment.filename)}</a></div>`
+    : '';
+  return `<div class="entry"><div>${esc(u.note)}</div>${att}<div class="meta">${new Date(u.ts).toLocaleString([], {hour:'2-digit', minute:'2-digit'})} · ${esc(u.status)}</div></div>`;
 }
 
 async function api(action, extra) {
@@ -225,6 +285,7 @@ function render() {
   const preservedPageScroll = window.scrollY;
   renderMetrics();
   renderReviews();
+  renderHistoryTable();
   const sel = document.getElementById('adminStationSelect');
   const prev = sel.value;
   sel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
@@ -364,6 +425,44 @@ async function rejectReview(taskId) {
     await refresh();
   } catch (e) { handleAdminActionError(e, err); }
 }
+
+function renderHistoryTable() {
+  const body = document.getElementById('historyBody');
+  if (!history.length) {
+    body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--ink-soft);">No completed tasks yet.</td></tr>';
+    return;
+  }
+  body.innerHTML = history.map((h, i) => `
+    <tr data-idx="${i}">
+      <td>${fmtAgo(h.completedAt)}</td>
+      <td>${esc(h.stationName)}</td>
+      <td>${esc(h.ownerName)}</td>
+      <td>${esc(h.taskLabel)}</td>
+      <td>${esc(h.kit || '-')}</td>
+      <td class="mono">${fmtDuration(h.taskDurationMs)}</td>
+      <td class="mono">${fmtDuration(h.reviewDurationMs)}</td>
+    </tr>`).join('');
+  body.querySelectorAll('tr[data-idx]').forEach(row => {
+    row.addEventListener('click', () => openHistoryDetail(history[Number(row.dataset.idx)]));
+  });
+}
+
+function openHistoryDetail(h) {
+  document.getElementById('historyDetailTitle').textContent = `${h.stationName} — ${h.taskLabel}`;
+  document.getElementById('historyDetailSub').textContent =
+    `${h.ownerName} · kit ${h.kit || 'n/a'} · task ${fmtDuration(h.taskDurationMs)} · review ${fmtDuration(h.reviewDurationMs)} · completed ${new Date(h.completedAt).toLocaleString()}`;
+  document.getElementById('historyDetailLog').innerHTML = h.updates.length
+    ? h.updates.map(updateEntryHtml).join('')
+    : '<div class="empty">No update notes.</div>';
+  document.getElementById('historyDetailDownload').href = '/.netlify/functions/report?id=' + encodeURIComponent(h.id);
+  document.getElementById('historyDetailOverlay').classList.remove('hidden');
+}
+document.getElementById('historyDetailClose').addEventListener('click', () => {
+  document.getElementById('historyDetailOverlay').classList.add('hidden');
+});
+document.getElementById('historyDetailOverlay').addEventListener('click', (e) => {
+  if (e.target === e.currentTarget) e.currentTarget.classList.add('hidden');
+});
 
 function syncStationRenameInput() {
   const s = state.stations.find(s => s.id === document.getElementById('adminStationSelect').value);
