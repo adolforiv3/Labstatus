@@ -222,6 +222,16 @@ function renderTaskDetail() {
   const s = state.stations.find(s => s.id === t.stationId);
   const timerMs = t.status === 'review' ? t.reviewElapsedMs : t.taskElapsedMs;
   const timerLabel = t.status === 'review' ? 'Review time' : 'Task time';
+
+  // This whole popup re-renders every second (live timer), which was
+  // resetting the log's internal scroll and the modal's own scroll back to
+  // the top every time - impossible to read through more than a couple of
+  // notes. Capture both before rebuilding, restore after.
+  const modalEl = document.querySelector('#taskDetailOverlay .modal');
+  const preservedModalScroll = modalEl ? modalEl.scrollTop : 0;
+  const logEl = body.querySelector('.modal-log');
+  const preservedLogScroll = logEl ? logEl.scrollTop : 0;
+
   body.innerHTML = `
     <div class="modal-station">${esc(s ? s.name : t.stationId)}</div>
     <div class="modal-task">${esc(t.taskLabel)}</div>
@@ -241,6 +251,10 @@ function renderTaskDetail() {
     <div class="modal-log">
       ${t.updates.length ? t.updates.slice().reverse().map(updateEntryHtml).join('') : '<div class="empty">No updates yet.</div>'}
     </div>`;
+
+  if (modalEl) modalEl.scrollTop = preservedModalScroll;
+  const freshLogEl = body.querySelector('.modal-log');
+  if (freshLogEl) freshLogEl.scrollTop = preservedLogScroll;
 }
 
 document.getElementById('closeDetailBtn').addEventListener('click', closeTaskDetail);
