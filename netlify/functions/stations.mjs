@@ -131,6 +131,7 @@ export default withErrorBoundary(async (req) => {
           status: nextStatus || task.status,
           updates: [...task.updates, { ts: now, note, status: nextStatus || task.status }],
           updatedAt: now,
+          lastNoteAt: now, // manual note posted - resets the reminder-nudge clock
         };
         return next;
       });
@@ -202,6 +203,7 @@ export default withErrorBoundary(async (req) => {
           reviewStartedAt: null,
           updates: [...task.updates, { ts: now.toISOString(), note, status: "sent back" }],
           updatedAt: now.toISOString(),
+          lastNoteAt: now.toISOString(), // fresh start on the reminder clock - they just got the "sent back" push
         };
         return next;
       });

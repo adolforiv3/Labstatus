@@ -67,6 +67,8 @@ export function newTask({ id, stationId, ownerName, taskLabel, kit }) {
     updates: [], // [{ts, note, status, attachment?}]
     helpFlag: false,
     updatedAt: now,
+    lastNoteAt: now, // reminder-nudge clock: starts at claim, only reset by a manual addUpdate note
+    lastReminderAt: null,
   };
 }
 

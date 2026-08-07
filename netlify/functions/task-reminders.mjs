@@ -18,9 +18,13 @@ export default async () => {
   const due = tasks.filter((t) => {
     if (t.status === "review") return false; // review has its own admin-facing flow, not a "keep logging notes" nudge
     if (!subscribedTaskIds.has(t.id)) return false;
-    const sinceUpdate = now - new Date(t.updatedAt || t.taskStartedAt).getTime();
+    // Clock starts at claim (taskStartedAt) and only resets on a manual
+    // addUpdate note (lastNoteAt) - not on help-flag toggles or a
+    // note-less attachment, which also touch updatedAt but shouldn't
+    // count as "they told us what's going on."
+    const sinceNote = now - new Date(t.lastNoteAt || t.taskStartedAt).getTime();
     const sinceReminder = t.lastReminderAt ? now - new Date(t.lastReminderAt).getTime() : Infinity;
-    return sinceUpdate >= REMINDER_MS && sinceReminder >= REMINDER_MS;
+    return sinceNote >= REMINDER_MS && sinceReminder >= REMINDER_MS;
   });
 
   if (!due.length) return new Response("no reminders due", { status: 200 });
@@ -46,4 +50,8 @@ export default async () => {
   return new Response(`sent ${due.length} reminder(s)`, { status: 200 });
 };
 
-export const config = { schedule: "*/30 * * * *" }; // checked every 30 min; actual reminders still only fire once per REMINDER_MS per task
+// Runs every 5 min so a 15-minute reminder interval actually resolves to
+// roughly 15 minutes, not gets rounded up to whatever the schedule tick
+// happens to be. Each task still only gets reminded once per REMINDER_MS
+// regardless of how often this runs.
+export const config = { schedule: "*/5 * * * *" };
