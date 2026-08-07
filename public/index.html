@@ -77,6 +77,13 @@
   button.small{ padding:6px 11px; font-size:13px; }
   button:focus-visible{ outline:2px solid var(--teal); outline-offset:2px; }
 
+  .tabbar{ display:flex; gap:8px; margin-bottom:18px; }
+  .tab{
+    padding:9px 18px; border-radius:var(--r-pill); background:var(--card); border:1px solid var(--border);
+    font-size:14px; font-weight:600; color:var(--ink-soft); cursor:pointer;
+  }
+  .tab.active{ background:var(--teal); color:#fff; border-color:transparent; }
+
   .chipbar{ display:flex; gap:8px; flex-wrap:wrap; margin-bottom:20px; }
   .chip{
     padding:8px 16px; border-radius:var(--r-pill); background:var(--card); border:1px solid var(--border);
@@ -89,16 +96,16 @@
   }
   .card{
     background:var(--card); border:1px solid var(--border); border-radius:var(--r-lg);
-    box-shadow:var(--shadow-sm); padding:20px; cursor:pointer; position:relative;
-    display:flex; flex-direction:column; gap:10px; min-height:180px;
+    box-shadow:var(--shadow-sm); padding:20px; position:relative;
+    display:flex; flex-direction:column; gap:10px; min-height:200px;
   }
   .card.status-idle{ background:var(--gray-bg); }
   .card.status-in-progress{ box-shadow:0 0 0 2px var(--green), var(--shadow-sm); }
-  .card.status-qa{ box-shadow:0 0 0 2px var(--amber), var(--shadow-sm); }
+  .card.status-review{ box-shadow:0 0 0 2px var(--amber), var(--shadow-sm); }
   .card.status-blocked{ box-shadow:0 0 0 2px var(--red), var(--shadow-sm); }
   .card.help-flag{ animation:pulse-border 1.1s ease-in-out infinite; }
   @keyframes pulse-border{
-    0%,100%{ box-shadow:0 0 0 2px var(--red), 0 0 0 2px var(--red), var(--shadow-sm); }
+    0%,100%{ box-shadow:0 0 0 2px var(--red), var(--shadow-sm); }
     50%{ box-shadow:0 0 0 6px var(--red-bg), 0 0 0 2px var(--red), var(--shadow-md); }
   }
   .card-top{ display:flex; justify-content:space-between; align-items:flex-start; gap:8px; }
@@ -110,20 +117,24 @@
   }
   .status-badge.idle{ background:var(--gray-bg); color:var(--ink-soft); }
   .status-badge.in-progress{ background:var(--green-bg); color:var(--green); }
-  .status-badge.qa{ background:var(--amber-bg); color:var(--amber); }
+  .status-badge.review{ background:var(--amber-bg); color:var(--amber); }
   .status-badge.blocked{ background:var(--red-bg); color:var(--red); }
   .owner-name{ font-size:17px; font-weight:600; }
-  .task-label{ font-size:15px; color:var(--ink-soft); line-height:1.4; flex:1; }
-  .team-label{ font-size:12px; color:var(--ink-soft); }
+  .task-label{ font-size:15px; color:var(--ink-soft); line-height:1.4; }
   .idle-hint{ font-size:15px; color:var(--ink-soft); flex:1; display:flex; align-items:center; justify-content:center; }
-  .card-meta{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--ink-soft); }
+  .timer{ font-size:28px; font-weight:700; letter-spacing:-0.01em; }
+  .timer-label{ font-size:11px; color:var(--ink-soft); text-transform:uppercase; letter-spacing:.04em; font-weight:600; }
+  .card-meta{ display:flex; justify-content:space-between; align-items:center; font-size:12px; color:var(--ink-soft); margin-top:auto; }
   .stale-tag{ color:var(--red); font-weight:700; }
+  .card-actions{ display:flex; gap:8px; flex-wrap:wrap; margin-top:4px; }
+  .card-actions button{ flex:1; min-width:90px; }
   .help-btn{
     position:absolute; top:14px; right:14px; width:34px; height:34px; border-radius:50%;
     display:flex; align-items:center; justify-content:center; font-size:16px; padding:0;
     background:var(--card); border:1px solid var(--border);
   }
   .help-btn.active{ background:var(--red); color:#fff; border-color:transparent; }
+  .claim-btn{ width:100%; }
 
   .overlay{
     position:fixed; inset:0; background:var(--overlay-bg); display:flex; align-items:center; justify-content:center;
@@ -132,7 +143,7 @@
   .hidden{ display:none !important; }
   .modal{
     background:var(--card); border-radius:var(--r-lg); box-shadow:var(--shadow-lg); padding:28px;
-    width:100%; max-width:420px; max-height:90vh; overflow-y:auto;
+    width:100%; max-width:440px; max-height:90vh; overflow-y:auto;
   }
   .modal h2{ font-size:21px; margin-bottom:6px; letter-spacing:-0.01em; }
   .modal p.sub{ font-size:14px; color:var(--ink-soft); margin-bottom:18px; }
@@ -143,15 +154,25 @@
     padding:11px 14px; color:var(--ink); border-radius:var(--r-sm);
   }
   input:focus, select:focus, textarea:focus{ outline:none; border-color:var(--teal); box-shadow:0 0 0 4px var(--teal-bg); }
-  .status-picker{ display:flex; gap:8px; flex-wrap:wrap; }
-  .status-picker button{ flex:1; min-width:80px; }
-  .status-picker button.selected{ background:var(--teal); color:#fff; border-color:transparent; }
   .modal-actions{ display:flex; gap:10px; margin-top:20px; }
   .modal-actions button{ flex:1; }
   .error-msg{ color:var(--red); font-size:13px; margin-top:8px; min-height:16px; }
   .close-x{ position:absolute; top:16px; right:16px; background:transparent; border:none; font-size:20px; color:var(--ink-soft); padding:4px 8px; }
 
+  .updates-log{ border:1px solid var(--border); border-radius:var(--r-sm); max-height:160px; overflow-y:auto; margin-bottom:14px; }
+  .updates-log .entry{ padding:9px 12px; border-bottom:1px solid var(--border); font-size:13px; }
+  .updates-log .entry:last-child{ border-bottom:none; }
+  .updates-log .entry .meta{ color:var(--ink-soft); font-size:11px; margin-top:2px; }
+  .updates-log .empty{ padding:14px; text-align:center; color:var(--ink-soft); font-size:13px; }
+
   .empty-state{ text-align:center; padding:60px 20px; color:var(--ink-soft); font-size:16px; }
+
+  table.history-table{ width:100%; border-collapse:collapse; background:var(--card); border-radius:var(--r-lg); overflow:hidden; box-shadow:var(--shadow-sm); }
+  table.history-table th, table.history-table td{ text-align:left; padding:12px 14px; border-bottom:1px solid var(--border); font-size:14px; }
+  table.history-table th{ font-size:11px; text-transform:uppercase; letter-spacing:.04em; color:var(--ink-soft); background:var(--gray-bg); }
+  table.history-table tr:last-child td{ border-bottom:none; }
+  table.history-table tr{ cursor:pointer; }
+  .table-wrap{ overflow-x:auto; border-radius:var(--r-lg); }
 </style>
 </head>
 <body>
@@ -159,7 +180,7 @@
 <header class="top">
   <div>
     <div class="brand-eyebrow">LAB STATUS BOARD</div>
-    <div class="brand-title">Live Station View</div>
+    <div class="brand-title">Live Task Tracker</div>
   </div>
   <div class="header-actions">
     <span class="clock mono" id="clock"></span>
@@ -168,58 +189,72 @@
 </header>
 
 <main>
-  <div class="chipbar" id="zoneChips"></div>
-  <div class="grid" id="grid"></div>
-</main>
+  <div class="tabbar">
+    <div class="tab active" data-tab="board">Board</div>
+    <div class="tab" data-tab="history">History</div>
+  </div>
 
-<!-- Team passcode modal -->
-<div class="overlay hidden" id="passcodeOverlay">
-  <div class="modal">
-    <button class="close-x" data-close="passcodeOverlay">&times;</button>
-    <h2 id="passcodeTitle">Enter team passcode</h2>
-    <p class="sub" id="passcodeSub">Needed once per shift to claim or update this station.</p>
-    <div class="field">
-      <label>Passcode</label>
-      <input type="password" id="passcodeInput" autocomplete="off">
-    </div>
-    <div class="error-msg" id="passcodeError"></div>
-    <div class="modal-actions">
-      <button class="ghost" data-close="passcodeOverlay">Cancel</button>
-      <button class="primary" id="passcodeSubmit">Unlock</button>
+  <div id="boardView">
+    <div class="chipbar" id="zoneChips"></div>
+    <div class="grid" id="grid"></div>
+  </div>
+
+  <div id="historyView" class="hidden">
+    <div class="table-wrap">
+      <table class="history-table" id="historyTable">
+        <thead>
+          <tr><th>Completed</th><th>Station</th><th>Person</th><th>Task</th><th>Task time</th><th>Review time</th></tr>
+        </thead>
+        <tbody id="historyBody"></tbody>
+      </table>
     </div>
   </div>
-</div>
+</main>
 
-<!-- Claim/update modal -->
+<!-- Claim modal -->
 <div class="overlay hidden" id="claimOverlay">
   <div class="modal">
     <button class="close-x" data-close="claimOverlay">&times;</button>
     <h2 id="claimTitle">Claim station</h2>
-    <p class="sub" id="claimSub"></p>
     <div class="field">
       <label>Your name</label>
       <input type="text" id="ownerNameInput">
     </div>
     <div class="field">
       <label>Task</label>
-      <textarea id="taskLabelInput" rows="2"></textarea>
-    </div>
-    <div class="field">
-      <label>Status</label>
-      <div class="status-picker" id="statusPicker">
-        <button type="button" data-status="in-progress">In Progress</button>
-        <button type="button" data-status="qa">QA</button>
-        <button type="button" data-status="blocked">Blocked</button>
-      </div>
-    </div>
-    <div class="field">
-      <label>ETA (optional)</label>
-      <input type="text" id="etaInput" placeholder="e.g. 3:30pm">
+      <textarea id="taskLabelInput" rows="2" placeholder="What are you working on?"></textarea>
     </div>
     <div class="error-msg" id="claimError"></div>
     <div class="modal-actions">
-      <button class="ghost" id="releaseBtn">Release</button>
-      <button class="primary" id="claimSubmit">Save</button>
+      <button class="ghost" data-close="claimOverlay">Cancel</button>
+      <button class="primary" id="claimSubmit">Start task</button>
+    </div>
+  </div>
+</div>
+
+<!-- Task detail / update modal -->
+<div class="overlay hidden" id="taskOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="taskOverlay">&times;</button>
+    <h2 id="taskTitle">Station</h2>
+    <p class="sub" id="taskSub"></p>
+    <div class="updates-log" id="updatesLog"></div>
+    <div class="field">
+      <label id="noteLabel">Update note (required)</label>
+      <textarea id="noteInput" rows="3"></textarea>
+    </div>
+    <div class="error-msg" id="taskError"></div>
+    <div class="modal-actions" id="taskActionsRow1">
+      <button class="ghost" id="markBlockedBtn">Mark blocked</button>
+      <button class="ghost" id="postUpdateBtn">Post update</button>
+    </div>
+    <div class="modal-actions" id="taskActionsRow2">
+      <button class="ghost" id="releaseTaskBtn">Release (abandon)</button>
+      <button class="primary" id="sendReviewBtn">Send to review</button>
+    </div>
+    <div class="modal-actions hidden" id="taskActionsReview">
+      <button class="ghost" id="releaseTaskBtn2">Release (abandon)</button>
+      <button class="primary" id="completeTaskBtn">Complete task</button>
     </div>
   </div>
 </div>
@@ -242,17 +277,12 @@
       </div>
     </div>
     <div id="adminPanel" class="hidden">
-      <p class="sub">Reassign a station's team, force-release it, or set a team's passcode.</p>
+      <p class="sub">Force-release or rename a station.</p>
       <div class="field">
         <label>Station</label>
         <select id="adminStationSelect"></select>
       </div>
-      <div class="field">
-        <label>Assign to team</label>
-        <select id="adminTeamSelect"></select>
-      </div>
       <div class="modal-actions">
-        <button class="ghost small" id="adminReassignBtn">Reassign</button>
         <button class="danger small" id="adminForceReleaseBtn">Force release</button>
       </div>
       <div class="field">
@@ -260,59 +290,60 @@
         <input type="text" id="adminStationRenameInput">
       </div>
       <button class="ghost small" id="adminRenameStationBtn">Rename station</button>
-      <hr style="margin:20px 0; border:none; border-top:1px solid var(--border);">
-      <div class="field">
-        <label>Team</label>
-        <select id="adminPasscodeTeamSelect"></select>
-      </div>
-      <div class="field">
-        <label>Rename this team</label>
-        <input type="text" id="adminTeamRenameInput">
-      </div>
-      <button class="ghost small" id="adminRenameTeamBtn">Rename team</button>
-      <div class="field" style="margin-top:14px;">
-        <label>New passcode</label>
-        <input type="text" id="adminNewPasscodeInput">
-      </div>
-      <button class="primary small" id="adminSetPasscodeBtn">Set passcode</button>
       <div class="error-msg" id="adminPanelError"></div>
     </div>
+  </div>
+</div>
+
+<!-- History detail modal -->
+<div class="overlay hidden" id="historyDetailOverlay">
+  <div class="modal">
+    <button class="close-x" data-close="historyDetailOverlay">&times;</button>
+    <h2 id="historyDetailTitle">Task</h2>
+    <p class="sub" id="historyDetailSub"></p>
+    <div class="updates-log" id="historyDetailLog"></div>
   </div>
 </div>
 
 <script>
 const API = '/.netlify/functions/stations';
 const ZONE_LABELS = { offload: 'Offload', config: 'Config', 'script-testing': 'Script Testing', desk: 'Desk' };
-let state = { stations: [], teams: [], zones: [] };
+let state = { stations: [], zones: [] };
+let history = [];
 let activeZone = 'all';
+let activeTab = 'board';
 let claimingStationId = null;
-let selectedStatus = 'in-progress';
-let pendingPasscodeTeamId = null;
-let pendingPasscodeThen = null;
+let taskStationId = null;
 
-function teamToken(teamId) { return sessionStorage.getItem('teamToken:' + teamId); }
-function setTeamToken(teamId, token) { sessionStorage.setItem('teamToken:' + teamId, token); }
 function adminToken() { return sessionStorage.getItem('adminToken'); }
 function setAdminToken(token) { sessionStorage.setItem('adminToken', token); }
 
 function show(id) { document.getElementById(id).classList.remove('hidden'); }
 function hide(id) { document.getElementById(id).classList.add('hidden'); }
-
 document.querySelectorAll('[data-close]').forEach(btn => {
   btn.addEventListener('click', () => hide(btn.dataset.close));
 });
 
-function fmtElapsed(iso) {
+function esc(s) {
+  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+}
+
+function fmtDuration(ms) {
+  if (ms == null) return '--:--';
+  const totalSec = Math.max(0, Math.round(ms / 1000));
+  const h = Math.floor(totalSec / 3600);
+  const m = Math.floor((totalSec % 3600) / 60);
+  const s = totalSec % 60;
+  const pad = (n) => String(n).padStart(2, '0');
+  return h > 0 ? `${h}:${pad(m)}:${pad(s)}` : `${pad(m)}:${pad(s)}`;
+}
+
+function fmtAgo(iso) {
   if (!iso) return '';
   const mins = Math.max(0, Math.round((Date.now() - new Date(iso).getTime()) / 60000));
   if (mins < 60) return mins + 'm ago';
   const h = Math.floor(mins / 60), m = mins % 60;
   return h + 'h ' + m + 'm ago';
-}
-
-function teamName(id) {
-  const t = state.teams.find(t => t.id === id);
-  return t ? t.name : id || 'Unassigned';
 }
 
 async function api(action, extra) {
@@ -326,42 +357,37 @@ async function api(action, extra) {
   return data;
 }
 
-async function refresh() {
+async function refreshBoard() {
   try {
     const res = await fetch(API + '?t=' + Date.now());
     const data = await res.json();
     state.stations = data.stations;
-    state.teams = data.teams;
     state.zones = data.zones;
     render();
-  } catch (e) {
-    console.error('refresh failed', e);
-  }
+  } catch (e) { console.error('refresh failed', e); }
 }
 
-function render() {
-  renderZoneChips();
-  const grid = document.getElementById('grid');
-  const visible = state.stations.filter(s => activeZone === 'all' || s.zone === activeZone);
-  if (!visible.length) {
-    grid.innerHTML = '<div class="empty-state">No stations in this zone.</div>';
-    return;
-  }
-  grid.innerHTML = visible.map(cardHtml).join('');
-  grid.querySelectorAll('.card').forEach(el => {
-    el.addEventListener('click', (e) => {
-      if (e.target.closest('.help-btn')) return;
-      openClaim(el.dataset.id);
-    });
-  });
-  grid.querySelectorAll('.help-btn').forEach(el => {
-    el.addEventListener('click', (e) => {
-      e.stopPropagation();
-      toggleHelp(el.dataset.id);
-    });
-  });
+async function refreshHistory() {
+  try {
+    const res = await fetch(API + '?history=1&t=' + Date.now());
+    const data = await res.json();
+    history = data.history;
+    renderHistory();
+  } catch (e) { console.error('history refresh failed', e); }
 }
 
+// --- Tabs ---
+document.querySelectorAll('.tab').forEach(el => {
+  el.addEventListener('click', () => {
+    activeTab = el.dataset.tab;
+    document.querySelectorAll('.tab').forEach(t => t.classList.toggle('active', t.dataset.tab === activeTab));
+    document.getElementById('boardView').classList.toggle('hidden', activeTab !== 'board');
+    document.getElementById('historyView').classList.toggle('hidden', activeTab !== 'history');
+    if (activeTab === 'history') refreshHistory();
+  });
+});
+
+// --- Board render ---
 function renderZoneChips() {
   const bar = document.getElementById('zoneChips');
   const zones = ['all', ...state.zones];
@@ -373,16 +399,48 @@ function renderZoneChips() {
   });
 }
 
-function esc(s) {
-  return (s || '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function render() {
+  renderZoneChips();
+  const grid = document.getElementById('grid');
+  const visible = state.stations.filter(s => activeZone === 'all' || s.zone === activeZone);
+  if (!visible.length) {
+    grid.innerHTML = '<div class="empty-state">No stations in this zone.</div>';
+    return;
+  }
+  grid.innerHTML = visible.map(cardHtml).join('');
+  grid.querySelectorAll('[data-open]').forEach(el => {
+    el.addEventListener('click', () => openTask(el.dataset.open));
+  });
+  grid.querySelectorAll('[data-claim]').forEach(el => {
+    el.addEventListener('click', () => openClaim(el.dataset.claim));
+  });
+  grid.querySelectorAll('.help-btn').forEach(el => {
+    el.addEventListener('click', (e) => { e.stopPropagation(); toggleHelp(el.dataset.id); });
+  });
 }
 
 function cardHtml(s) {
   const isIdle = s.status === 'idle';
   const classes = ['card', 'status-' + s.status, s.helpFlag ? 'help-flag' : ''].join(' ');
+  if (isIdle) {
+    return `
+    <div class="${classes}">
+      <div class="card-top">
+        <div>
+          <div class="station-name">${esc(s.name)}</div>
+          <div class="zone-tag">${ZONE_LABELS[s.zone] || s.zone}</div>
+        </div>
+        <div class="status-badge idle">Idle</div>
+      </div>
+      <div class="idle-hint">Not in use</div>
+      <button class="primary claim-btn" data-claim="${s.id}">Claim &amp; start task</button>
+    </div>`;
+  }
+  const timerMs = s.status === 'review' ? s.reviewElapsedMs : s.taskElapsedMs;
+  const timerLabel = s.status === 'review' ? 'Review time' : 'Task time';
   return `
-  <div class="${classes}" data-id="${s.id}">
-    ${!isIdle ? `<button class="help-btn ${s.helpFlag ? 'active' : ''}" data-id="${s.id}" title="Flag for help">!</button>` : ''}
+  <div class="${classes}" data-open="${s.id}">
+    ${`<button class="help-btn ${s.helpFlag ? 'active' : ''}" data-id="${s.id}" title="Flag for help">!</button>`}
     <div class="card-top">
       <div>
         <div class="station-name">${esc(s.name)}</div>
@@ -390,138 +448,123 @@ function cardHtml(s) {
       </div>
       <div class="status-badge ${s.status}">${s.status.replace('-', ' ')}</div>
     </div>
-    ${isIdle
-      ? `<div class="idle-hint">Tap to claim &middot; ${esc(teamName(s.assignedTeamId))}</div>`
-      : `
-        <div class="owner-name">${esc(s.ownerName || '')}</div>
-        <div class="task-label">${esc(s.taskLabel || '')}</div>
-        <div class="team-label">${esc(teamName(s.assignedTeamId))}${s.eta ? ' &middot; ETA ' + esc(s.eta) : ''}</div>
-        <div class="card-meta">
-          <span class="mono">${fmtElapsed(s.claimedAt)}</span>
-          ${s.stale ? '<span class="stale-tag">STALE</span>' : ''}
-        </div>
-      `}
+    <div class="owner-name">${esc(s.ownerName || '')}</div>
+    <div class="task-label">${esc(s.taskLabel || '')}</div>
+    <div>
+      <div class="timer-label">${timerLabel}</div>
+      <div class="timer mono">${fmtDuration(timerMs)}</div>
+    </div>
+    <div class="card-meta">
+      <span>${s.updates.length} update${s.updates.length === 1 ? '' : 's'}</span>
+      ${s.stale ? '<span class="stale-tag">STALE</span>' : ''}
+    </div>
   </div>`;
 }
 
 function toggleHelp(stationId) {
-  const s = state.stations.find(s => s.id === stationId);
-  withTeamAccess(s, async (auth) => {
-    await api('toggleHelp', { stationId, ...auth });
-    await refresh();
-  });
+  api('toggleHelp', { stationId }).then(refreshBoard).catch(e => alert(e.message));
 }
 
-function withTeamAccess(station, then) {
-  const tok = teamToken(station.assignedTeamId);
-  if (adminToken()) { then({ adminToken: adminToken() }); return; }
-  if (tok) { then({ teamToken: tok }); return; }
-  pendingPasscodeTeamId = station.assignedTeamId;
-  pendingPasscodeThen = then;
-  document.getElementById('passcodeTitle').textContent = 'Enter passcode for ' + teamName(station.assignedTeamId);
-  document.getElementById('passcodeSub').textContent = 'Needed once per shift to claim or update this station.';
-  document.getElementById('passcodeError').textContent = '';
-  document.getElementById('passcodeInput').value = '';
-  show('passcodeOverlay');
-  document.getElementById('passcodeInput').focus();
-}
-
-document.getElementById('passcodeSubmit').addEventListener('click', async () => {
-  const passcode = document.getElementById('passcodeInput').value;
-  const err = document.getElementById('passcodeError');
-  err.textContent = '';
-  try {
-    const data = await api('verifyTeamPasscode', { teamId: pendingPasscodeTeamId, passcode });
-    setTeamToken(pendingPasscodeTeamId, data.token);
-    hide('passcodeOverlay');
-    if (pendingPasscodeThen) pendingPasscodeThen({ teamToken: data.token });
-  } catch (e) {
-    err.textContent = e.message;
-  }
-});
-document.getElementById('passcodeInput').addEventListener('keydown', (e) => {
-  if (e.key === 'Enter') document.getElementById('passcodeSubmit').click();
-});
-
+// --- Claim modal ---
 function openClaim(stationId) {
-  const s = state.stations.find(s => s.id === stationId);
-  if (!s) return;
   claimingStationId = stationId;
-  withTeamAccess(s, () => {
-    document.getElementById('claimTitle').textContent = (s.status === 'idle' ? 'Claim ' : 'Update ') + s.name;
-    document.getElementById('claimSub').textContent = teamName(s.assignedTeamId);
-    document.getElementById('ownerNameInput').value = s.ownerName || '';
-    document.getElementById('taskLabelInput').value = s.taskLabel || '';
-    document.getElementById('etaInput').value = s.eta || '';
-    document.getElementById('claimError').textContent = '';
-    selectedStatus = s.status !== 'idle' ? s.status : 'in-progress';
-    updateStatusPicker();
-    document.getElementById('releaseBtn').style.display = s.status === 'idle' ? 'none' : '';
-    show('claimOverlay');
-  });
+  const s = state.stations.find(s => s.id === stationId);
+  document.getElementById('claimTitle').textContent = 'Claim ' + (s ? s.name : '');
+  document.getElementById('ownerNameInput').value = '';
+  document.getElementById('taskLabelInput').value = '';
+  document.getElementById('claimError').textContent = '';
+  show('claimOverlay');
+  document.getElementById('ownerNameInput').focus();
 }
-
-function updateStatusPicker() {
-  document.querySelectorAll('#statusPicker button').forEach(b => {
-    b.classList.toggle('selected', b.dataset.status === selectedStatus);
-  });
-}
-document.querySelectorAll('#statusPicker button').forEach(b => {
-  b.addEventListener('click', () => { selectedStatus = b.dataset.status; updateStatusPicker(); });
-});
-
-function currentAuth(station) {
-  if (adminToken()) return { adminToken: adminToken() };
-  return { teamToken: teamToken(station.assignedTeamId) };
-}
-
 document.getElementById('claimSubmit').addEventListener('click', async () => {
-  const s = state.stations.find(s => s.id === claimingStationId);
   const err = document.getElementById('claimError');
   err.textContent = '';
   try {
-    const payload = {
+    await api('claim', {
       stationId: claimingStationId,
       ownerName: document.getElementById('ownerNameInput').value,
       taskLabel: document.getElementById('taskLabelInput').value,
-      status: selectedStatus,
-      eta: document.getElementById('etaInput').value,
-      ...currentAuth(s),
-    };
-    await api(s.status === 'idle' ? 'claim' : 'update', payload);
+    });
     hide('claimOverlay');
-    await refresh();
-  } catch (e) {
-    err.textContent = e.message;
-  }
+    await refreshBoard();
+  } catch (e) { err.textContent = e.message; }
 });
 
-document.getElementById('releaseBtn').addEventListener('click', async () => {
-  const s = state.stations.find(s => s.id === claimingStationId);
-  const err = document.getElementById('claimError');
-  try {
-    await api('release', { stationId: claimingStationId, ...currentAuth(s) });
-    hide('claimOverlay');
-    await refresh();
-  } catch (e) {
-    err.textContent = e.message;
-  }
+// --- Task detail modal ---
+function openTask(stationId) {
+  taskStationId = stationId;
+  const s = state.stations.find(s => s.id === stationId);
+  if (!s) return;
+  document.getElementById('taskTitle').textContent = s.name;
+  document.getElementById('taskSub').textContent = `${s.ownerName} · ${s.taskLabel}`;
+  document.getElementById('noteInput').value = '';
+  document.getElementById('taskError').textContent = '';
+
+  const log = document.getElementById('updatesLog');
+  log.innerHTML = s.updates.length
+    ? s.updates.slice().reverse().map(u => `
+        <div class="entry">
+          <div>${esc(u.note)}</div>
+          <div class="meta">${new Date(u.ts).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})} · ${u.status}</div>
+        </div>`).join('')
+    : '<div class="empty">No updates yet.</div>';
+
+  const inReview = s.status === 'review';
+  document.getElementById('taskActionsRow1').classList.toggle('hidden', inReview);
+  document.getElementById('taskActionsRow2').classList.toggle('hidden', inReview);
+  document.getElementById('taskActionsReview').classList.toggle('hidden', !inReview);
+  document.getElementById('noteLabel').textContent = inReview ? 'Closing note (required)' : 'Update note (required)';
+  document.getElementById('markBlockedBtn').textContent = s.status === 'blocked' ? 'Mark in progress' : 'Mark blocked';
+  show('taskOverlay');
+}
+
+function currentNote() {
+  return document.getElementById('noteInput').value.trim();
+}
+
+document.getElementById('postUpdateBtn').addEventListener('click', () => submitTaskAction('addUpdate'));
+document.getElementById('markBlockedBtn').addEventListener('click', () => {
+  const s = state.stations.find(s => s.id === taskStationId);
+  const nextStatus = s.status === 'blocked' ? 'in-progress' : 'blocked';
+  submitTaskAction('addUpdate', { status: nextStatus });
 });
+document.getElementById('sendReviewBtn').addEventListener('click', () => submitTaskAction('sendToReview'));
+document.getElementById('completeTaskBtn').addEventListener('click', () => submitTaskAction('completeTask'));
+document.getElementById('releaseTaskBtn').addEventListener('click', releaseTask);
+document.getElementById('releaseTaskBtn2').addEventListener('click', releaseTask);
+
+async function submitTaskAction(action, extra) {
+  const err = document.getElementById('taskError');
+  err.textContent = '';
+  const note = currentNote();
+  if (!note) { err.textContent = 'a note is required'; return; }
+  try {
+    await api(action, { stationId: taskStationId, note, ...extra });
+    hide('taskOverlay');
+    await refreshBoard();
+  } catch (e) { err.textContent = e.message; }
+}
+
+async function releaseTask() {
+  if (!confirm('Abandon this task with no history record?')) return;
+  const err = document.getElementById('taskError');
+  try {
+    await api('release', { stationId: taskStationId });
+    hide('taskOverlay');
+    await refreshBoard();
+  } catch (e) { err.textContent = e.message; }
+}
 
 // --- Admin ---
 document.getElementById('adminBtn').addEventListener('click', () => {
   document.getElementById('adminError').textContent = '';
   document.getElementById('adminPasscodeInput').value = '';
-  if (adminToken()) {
-    openAdminPanel();
-  } else {
-    show('adminGate');
+  if (adminToken()) { openAdminPanel(); } else {
     document.getElementById('adminGate').classList.remove('hidden');
     document.getElementById('adminPanel').classList.add('hidden');
   }
   show('adminOverlay');
 });
-
 document.getElementById('adminSubmit').addEventListener('click', async () => {
   const passcode = document.getElementById('adminPasscodeInput').value;
   const err = document.getElementById('adminError');
@@ -530,35 +573,28 @@ document.getElementById('adminSubmit').addEventListener('click', async () => {
     const data = await api('adminVerify', { passcode });
     setAdminToken(data.token);
     openAdminPanel();
-  } catch (e) {
-    err.textContent = e.message;
-  }
+  } catch (e) { err.textContent = e.message; }
 });
-
 function openAdminPanel() {
   document.getElementById('adminGate').classList.add('hidden');
   document.getElementById('adminPanel').classList.remove('hidden');
-  const stationSel = document.getElementById('adminStationSelect');
-  stationSel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
-  const teamOptions = '<option value="">Unassigned</option>' + state.teams.map(t => `<option value="${t.id}">${esc(t.name)}</option>`).join('');
-  document.getElementById('adminTeamSelect').innerHTML = teamOptions;
-  const passcodeTeamSel = document.getElementById('adminPasscodeTeamSelect');
-  passcodeTeamSel.innerHTML = state.teams.map(t => `<option value="${t.id}">${esc(t.name)}${t.hasPasscode ? '' : ' (no passcode set)'}</option>`).join('');
+  const sel = document.getElementById('adminStationSelect');
+  sel.innerHTML = state.stations.map(s => `<option value="${s.id}">${esc(s.name)}</option>`).join('');
   syncStationRenameInput();
-  syncTeamRenameInput();
 }
-
 function syncStationRenameInput() {
   const s = state.stations.find(s => s.id === document.getElementById('adminStationSelect').value);
   document.getElementById('adminStationRenameInput').value = s ? s.name : '';
 }
-function syncTeamRenameInput() {
-  const t = state.teams.find(t => t.id === document.getElementById('adminPasscodeTeamSelect').value);
-  document.getElementById('adminTeamRenameInput').value = t ? t.name : '';
-}
 document.getElementById('adminStationSelect').addEventListener('change', syncStationRenameInput);
-document.getElementById('adminPasscodeTeamSelect').addEventListener('change', syncTeamRenameInput);
-
+document.getElementById('adminForceReleaseBtn').addEventListener('click', async () => {
+  const err = document.getElementById('adminPanelError');
+  err.textContent = '';
+  try {
+    await api('adminForceRelease', { adminToken: adminToken(), stationId: document.getElementById('adminStationSelect').value });
+    await refreshBoard();
+  } catch (e) { err.textContent = e.message; }
+});
 document.getElementById('adminRenameStationBtn').addEventListener('click', async () => {
   const err = document.getElementById('adminPanelError');
   err.textContent = '';
@@ -568,73 +604,53 @@ document.getElementById('adminRenameStationBtn').addEventListener('click', async
       stationId: document.getElementById('adminStationSelect').value,
       name: document.getElementById('adminStationRenameInput').value,
     });
-    await refresh();
+    await refreshBoard();
     openAdminPanel();
   } catch (e) { err.textContent = e.message; }
 });
 
-document.getElementById('adminRenameTeamBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  try {
-    await api('adminRenameTeam', {
-      adminToken: adminToken(),
-      teamId: document.getElementById('adminPasscodeTeamSelect').value,
-      name: document.getElementById('adminTeamRenameInput').value,
-    });
-    await refresh();
-    openAdminPanel();
-  } catch (e) { err.textContent = e.message; }
-});
-
-document.getElementById('adminReassignBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  try {
-    await api('adminReassign', {
-      adminToken: adminToken(),
-      stationId: document.getElementById('adminStationSelect').value,
-      teamId: document.getElementById('adminTeamSelect').value,
-    });
-    await refresh();
-    openAdminPanel();
-  } catch (e) { err.textContent = e.message; }
-});
-
-document.getElementById('adminForceReleaseBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  try {
-    await api('adminForceRelease', { adminToken: adminToken(), stationId: document.getElementById('adminStationSelect').value });
-    await refresh();
-  } catch (e) { err.textContent = e.message; }
-});
-
-document.getElementById('adminSetPasscodeBtn').addEventListener('click', async () => {
-  const err = document.getElementById('adminPanelError');
-  err.textContent = '';
-  try {
-    const teamId = document.getElementById('adminPasscodeTeamSelect').value;
-    const team = state.teams.find(t => t.id === teamId);
-    await api('adminSetTeamPasscode', {
-      adminToken: adminToken(),
-      teamId,
-      name: team ? team.name : teamId,
-      passcode: document.getElementById('adminNewPasscodeInput').value,
-    });
-    document.getElementById('adminNewPasscodeInput').value = '';
-    await refresh();
-    openAdminPanel();
-  } catch (e) { err.textContent = e.message; }
-});
+// --- History ---
+function renderHistory() {
+  const body = document.getElementById('historyBody');
+  if (!history.length) {
+    body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--ink-soft);">No completed tasks yet.</td></tr>';
+    return;
+  }
+  body.innerHTML = history.map((h, i) => `
+    <tr data-idx="${i}">
+      <td>${fmtAgo(h.completedAt)}</td>
+      <td>${esc(h.stationName)}</td>
+      <td>${esc(h.ownerName)}</td>
+      <td>${esc(h.taskLabel)}</td>
+      <td class="mono">${fmtDuration(h.taskDurationMs)}</td>
+      <td class="mono">${fmtDuration(h.reviewDurationMs)}</td>
+    </tr>`).join('');
+  body.querySelectorAll('tr[data-idx]').forEach(row => {
+    row.addEventListener('click', () => openHistoryDetail(history[Number(row.dataset.idx)]));
+  });
+}
+function openHistoryDetail(h) {
+  document.getElementById('historyDetailTitle').textContent = `${h.stationName} — ${h.taskLabel}`;
+  document.getElementById('historyDetailSub').textContent =
+    `${h.ownerName} · task ${fmtDuration(h.taskDurationMs)} · review ${fmtDuration(h.reviewDurationMs)} · completed ${new Date(h.completedAt).toLocaleString()}`;
+  document.getElementById('historyDetailLog').innerHTML = h.updates.length
+    ? h.updates.map(u => `
+        <div class="entry">
+          <div>${esc(u.note)}</div>
+          <div class="meta">${new Date(u.ts).toLocaleString()} · ${u.status}</div>
+        </div>`).join('')
+    : '<div class="empty">No update notes.</div>';
+  show('historyDetailOverlay');
+}
 
 function tickClock() {
   document.getElementById('clock').textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 }
 tickClock();
 setInterval(tickClock, 30000);
-setInterval(refresh, 12000);
-refresh();
+setInterval(() => { if (activeTab === 'board') render(); }, 1000); // live timer tick
+setInterval(refreshBoard, 12000);
+refreshBoard();
 </script>
 </body>
 </html>

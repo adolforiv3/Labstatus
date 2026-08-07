@@ -1,23 +1,8 @@
 import { json, withErrorBoundary } from "./lib/http.mjs";
 import { ConcurrentWriteError } from "./lib/occ.mjs";
 import { ZONES } from "./lib/config.mjs";
-import {
-  loadStations,
-  mutateStations,
-  withStaleFlag,
-  loadTeams,
-  mutateTeams,
-  publicTeam,
-} from "./lib/state.mjs";
-import {
-  hashPasscode,
-  verifyPasscode,
-  newTeamToken,
-  resolveTeamToken,
-  newAdminToken,
-  resolveAdminToken,
-  checkBoardAdminPasscode,
-} from "./lib/auth.mjs";
+import { loadStations, mutateStations, withDerived, loadHistory, appendHistory } from "./lib/state.mjs";
+import { newAdminToken, resolveAdminToken, checkBoardAdminPasscode } from "./lib/auth.mjs";
 
 class ApiError extends Error {
   constructor(message, status) {
@@ -26,35 +11,36 @@ class ApiError extends Error {
   }
 }
 
-const STATUSES = ["idle", "in-progress", "qa", "blocked"];
-
 function isAdmin(body) {
   return !!body.adminToken && resolveAdminToken(body.adminToken);
 }
 
-// Resolves which team a request is authorized as, verifying the token
-// actually maps to the station's assigned team (unless the caller is an
-// admin, who can act on any station).
-function authorizeStation(station, body) {
-  if (isAdmin(body)) return { ok: true, admin: true };
-  const teamId = resolveTeamToken(body.teamToken);
-  if (!teamId) return { ok: false, error: "unauthorized - enter this team's passcode", status: 401 };
-  if (station.assignedTeamId !== teamId) {
-    return { ok: false, error: "this station belongs to a different team", status: 403 };
-  }
-  return { ok: true, admin: false, teamId };
+function resetToIdle(station) {
+  return {
+    ...station,
+    status: "idle",
+    ownerName: null,
+    taskLabel: null,
+    taskStartedAt: null,
+    taskDurationMs: null,
+    reviewStartedAt: null,
+    updates: [],
+    helpFlag: false,
+    updatedAt: null,
+  };
 }
 
 export default withErrorBoundary(async (req) => {
   const method = req.method;
+  const url = new URL(req.url);
 
   if (method === "GET") {
-    const [stations, teams] = await Promise.all([loadStations(), loadTeams()]);
-    return json({
-      stations: stations.map(withStaleFlag),
-      teams: teams.map(publicTeam),
-      zones: ZONES,
-    });
+    if (url.searchParams.get("history") === "1") {
+      const history = await loadHistory();
+      return json({ history });
+    }
+    const stations = await loadStations();
+    return json({ stations: stations.map(withDerived), zones: ZONES });
   }
 
   if (method !== "POST") {
@@ -65,15 +51,6 @@ export default withErrorBoundary(async (req) => {
   const action = body.action;
 
   try {
-    if (action === "verifyTeamPasscode") {
-      const teams = await loadTeams();
-      const team = teams.find((t) => t.id === body.teamId);
-      if (!team || !team.hash || !verifyPasscode(body.passcode || "", team.salt, team.hash)) {
-        return json({ error: "incorrect passcode" }, 401);
-      }
-      return json({ token: newTeamToken(team.id) });
-    }
-
     if (action === "adminVerify") {
       if (!checkBoardAdminPasscode(body.passcode)) {
         return json({ error: "incorrect admin passcode" }, 401);
@@ -81,110 +58,157 @@ export default withErrorBoundary(async (req) => {
       return json({ token: newAdminToken() });
     }
 
+    // Claim an idle station: starts the task timer.
     if (action === "claim") {
-      const stationId = body.stationId;
       const ownerName = (body.ownerName || "").trim();
       const taskLabel = (body.taskLabel || "").trim();
-      const status = STATUSES.includes(body.status) ? body.status : "in-progress";
       if (!ownerName) return json({ error: "name is required" }, 400);
+      if (!taskLabel) return json({ error: "task description is required" }, 400);
 
       const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === stationId);
+        const idx = stations.findIndex((s) => s.id === body.stationId);
         if (idx === -1) throw new ApiError("station not found", 404);
         const station = stations[idx];
-        const auth = authorizeStation(station, body);
-        if (!auth.ok) throw new ApiError(auth.error, auth.status);
-        if (station.assignedTeamId && station.status !== "idle" && !auth.admin) {
-          throw new ApiError("this station is already claimed", 409);
+        if (station.status !== "idle") throw new ApiError("this station is already claimed", 409);
+        const now = new Date().toISOString();
+        const next = [...stations];
+        next[idx] = {
+          ...station,
+          status: "in-progress",
+          ownerName,
+          taskLabel,
+          taskStartedAt: now,
+          taskDurationMs: null,
+          reviewStartedAt: null,
+          updates: [],
+          helpFlag: false,
+          updatedAt: now,
+        };
+        return next;
+      });
+      return json({ stations: stations.map(withDerived) });
+    }
+
+    // Periodic status update: a note is always required, so the update log
+    // is a real running record of the task, not just a final summary.
+    // Status may move between in-progress and blocked here; moving into
+    // review or completing are their own actions (see below).
+    if (action === "addUpdate") {
+      const note = (body.note || "").trim();
+      if (!note) return json({ error: "an update note is required" }, 400);
+      const nextStatus = body.status === "blocked" ? "blocked" : body.status === "in-progress" ? "in-progress" : null;
+
+      const stations = await mutateStations((stations) => {
+        const idx = stations.findIndex((s) => s.id === body.stationId);
+        if (idx === -1) throw new ApiError("station not found", 404);
+        const station = stations[idx];
+        if (station.status !== "in-progress" && station.status !== "blocked") {
+          throw new ApiError("station is not an active task", 400);
         }
         const now = new Date().toISOString();
         const next = [...stations];
         next[idx] = {
           ...station,
-          ownerName,
-          taskLabel,
-          status,
-          eta: body.eta ? String(body.eta).trim() : null,
-          claimedAt: now,
+          status: nextStatus || station.status,
+          updates: [...station.updates, { ts: now, note, status: nextStatus || station.status }],
           updatedAt: now,
-          helpFlag: false,
         };
         return next;
       });
-      return json({ stations: stations.map(withStaleFlag) });
+      return json({ stations: stations.map(withDerived) });
     }
 
-    if (action === "update") {
-      const stationId = body.stationId;
-      const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === stationId);
-        if (idx === -1) throw new ApiError("station not found", 404);
-        const station = stations[idx];
-        const auth = authorizeStation(station, body);
-        if (!auth.ok) throw new ApiError(auth.error, auth.status);
-        if (station.status === "idle") throw new ApiError("station is not claimed", 400);
-        const next = [...stations];
-        const updated = { ...station, updatedAt: new Date().toISOString() };
-        if (typeof body.taskLabel === "string") updated.taskLabel = body.taskLabel.trim();
-        if (typeof body.ownerName === "string" && body.ownerName.trim()) updated.ownerName = body.ownerName.trim();
-        if (STATUSES.includes(body.status)) updated.status = body.status;
-        if (typeof body.eta === "string") updated.eta = body.eta.trim() || null;
-        next[idx] = updated;
-        return next;
-      });
-      return json({ stations: stations.map(withStaleFlag) });
-    }
+    // Stops the task timer and starts the review timer - a note is
+    // required so there's always a "here's what I did" summary going into
+    // review.
+    if (action === "sendToReview") {
+      const note = (body.note || "").trim();
+      if (!note) return json({ error: "a note is required to send this to review" }, 400);
 
-    if (action === "release") {
-      const stationId = body.stationId;
       const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === stationId);
+        const idx = stations.findIndex((s) => s.id === body.stationId);
         if (idx === -1) throw new ApiError("station not found", 404);
         const station = stations[idx];
-        const auth = authorizeStation(station, body);
-        if (!auth.ok) throw new ApiError(auth.error, auth.status);
+        if (station.status !== "in-progress" && station.status !== "blocked") {
+          throw new ApiError("station is not an active task", 400);
+        }
+        const now = new Date().toISOString();
+        const taskDurationMs = station.taskStartedAt ? Date.now() - new Date(station.taskStartedAt).getTime() : 0;
         const next = [...stations];
         next[idx] = {
           ...station,
-          ownerName: null,
-          taskLabel: null,
-          status: "idle",
-          claimedAt: null,
-          updatedAt: null,
-          eta: null,
-          helpFlag: false,
+          status: "review",
+          taskDurationMs,
+          reviewStartedAt: now,
+          updates: [...station.updates, { ts: now, note, status: "review" }],
+          updatedAt: now,
         };
         return next;
       });
-      return json({ stations: stations.map(withStaleFlag) });
+      return json({ stations: stations.map(withDerived) });
     }
 
-    if (action === "toggleHelp") {
-      const stationId = body.stationId;
+    // Stops the review timer, requires a closing note, logs the full
+    // record (task time, review time, every update) to history, and
+    // resets the station back to idle.
+    if (action === "completeTask") {
+      const note = (body.note || "").trim();
+      if (!note) return json({ error: "a closing note is required to complete this task" }, 400);
+
+      let historyEntry = null;
       const stations = await mutateStations((stations) => {
-        const idx = stations.findIndex((s) => s.id === stationId);
+        const idx = stations.findIndex((s) => s.id === body.stationId);
         if (idx === -1) throw new ApiError("station not found", 404);
         const station = stations[idx];
-        const auth = authorizeStation(station, body);
-        if (!auth.ok) throw new ApiError(auth.error, auth.status);
-        if (station.status === "idle") throw new ApiError("station is not claimed", 400);
+        if (station.status !== "review") throw new ApiError("station is not in review", 400);
+        const now = new Date().toISOString();
+        const reviewDurationMs = station.reviewStartedAt ? Date.now() - new Date(station.reviewStartedAt).getTime() : 0;
+        const updates = [...station.updates, { ts: now, note, status: "complete" }];
+        historyEntry = {
+          id: crypto.randomUUID(),
+          stationId: station.id,
+          stationName: station.name,
+          zone: station.zone,
+          ownerName: station.ownerName,
+          taskLabel: station.taskLabel,
+          taskDurationMs: station.taskDurationMs,
+          reviewDurationMs,
+          updates,
+          startedAt: station.taskStartedAt,
+          completedAt: now,
+        };
         const next = [...stations];
-        next[idx] = { ...station, helpFlag: !station.helpFlag, updatedAt: new Date().toISOString() };
+        next[idx] = resetToIdle(station);
         return next;
       });
-      return json({ stations: stations.map(withStaleFlag) });
+      await appendHistory(historyEntry);
+      return json({ stations: stations.map(withDerived), completed: historyEntry });
     }
 
-    if (action === "adminReassign") {
-      if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
+    // Abandons the current claim with no history entry - for "claimed the
+    // wrong station" mistakes, not real task completion.
+    if (action === "release") {
       const stations = await mutateStations((stations) => {
         const idx = stations.findIndex((s) => s.id === body.stationId);
         if (idx === -1) throw new ApiError("station not found", 404);
         const next = [...stations];
-        next[idx] = { ...stations[idx], assignedTeamId: body.teamId || null };
+        next[idx] = resetToIdle(stations[idx]);
         return next;
       });
-      return json({ stations: stations.map(withStaleFlag) });
+      return json({ stations: stations.map(withDerived) });
+    }
+
+    if (action === "toggleHelp") {
+      const stations = await mutateStations((stations) => {
+        const idx = stations.findIndex((s) => s.id === body.stationId);
+        if (idx === -1) throw new ApiError("station not found", 404);
+        const station = stations[idx];
+        if (station.status === "idle") throw new ApiError("station is not an active task", 400);
+        const next = [...stations];
+        next[idx] = { ...station, helpFlag: !station.helpFlag, updatedAt: new Date().toISOString() };
+        return next;
+      });
+      return json({ stations: stations.map(withDerived) });
     }
 
     if (action === "adminForceRelease") {
@@ -193,19 +217,10 @@ export default withErrorBoundary(async (req) => {
         const idx = stations.findIndex((s) => s.id === body.stationId);
         if (idx === -1) throw new ApiError("station not found", 404);
         const next = [...stations];
-        next[idx] = {
-          ...stations[idx],
-          ownerName: null,
-          taskLabel: null,
-          status: "idle",
-          claimedAt: null,
-          updatedAt: null,
-          eta: null,
-          helpFlag: false,
-        };
+        next[idx] = resetToIdle(stations[idx]);
         return next;
       });
-      return json({ stations: stations.map(withStaleFlag) });
+      return json({ stations: stations.map(withDerived) });
     }
 
     if (action === "adminRenameStation") {
@@ -219,41 +234,7 @@ export default withErrorBoundary(async (req) => {
         next[idx] = { ...stations[idx], name };
         return next;
       });
-      return json({ stations: stations.map(withStaleFlag) });
-    }
-
-    if (action === "adminRenameTeam") {
-      if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
-      const name = (body.name || "").trim();
-      if (!name) return json({ error: "team name required" }, 400);
-      const teams = await mutateTeams((teams) => {
-        const idx = teams.findIndex((t) => t.id === body.teamId);
-        if (idx === -1) throw new ApiError("team not found", 404);
-        const next = [...teams];
-        next[idx] = { ...teams[idx], name };
-        return next;
-      });
-      return json({ teams: teams.map(publicTeam) });
-    }
-
-    if (action === "adminSetTeamPasscode") {
-      if (!isAdmin(body)) return json({ error: "admin passcode required" }, 401);
-      const teamId = (body.teamId || "").trim();
-      const name = (body.name || "").trim();
-      if (!teamId || !name) return json({ error: "team id and name required" }, 400);
-      if (!body.passcode || String(body.passcode).length < 4) {
-        return json({ error: "passcode must be 4+ characters" }, 400);
-      }
-      const { salt, hash } = hashPasscode(String(body.passcode));
-      const teams = await mutateTeams((teams) => {
-        const idx = teams.findIndex((t) => t.id === teamId);
-        const updated = { id: teamId, name, salt, hash };
-        if (idx === -1) return [...teams, updated];
-        const next = [...teams];
-        next[idx] = updated;
-        return next;
-      });
-      return json({ teams: teams.map(publicTeam) });
+      return json({ stations: stations.map(withDerived) });
     }
 
     return json({ error: "unknown action" }, 400);

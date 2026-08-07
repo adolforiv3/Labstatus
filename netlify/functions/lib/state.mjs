@@ -1,42 +1,37 @@
 import { stationBoardStore } from "./stores.mjs";
 import { updateJSON } from "./occ.mjs";
-import { STATIONS, DEFAULT_TEAMS, STALE_MS } from "./config.mjs";
+import { STATIONS, STALE_MS, HISTORY_LIMIT } from "./config.mjs";
 
 const STATIONS_KEY = "stations";
-const TEAMS_KEY = "teams";
+const HISTORY_KEY = "history";
 
 function emptyStationState(cfg) {
   return {
     id: cfg.id,
     name: cfg.name,
     zone: cfg.zone,
-    // Defaults to the single seeded team (see DEFAULT_TEAMS in config.mjs)
-    // so every station is claimable immediately with one study running -
-    // an admin can reassign individual stations once more teams exist.
-    assignedTeamId: DEFAULT_TEAMS[0] ? DEFAULT_TEAMS[0].id : null,
+    status: "idle", // idle | in-progress | blocked | review
     ownerName: null,
     taskLabel: null,
-    status: "idle",
-    claimedAt: null,
-    updatedAt: null,
-    eta: null,
+    taskStartedAt: null, // set on claim, cleared on completion/release
+    taskDurationMs: null, // frozen once the task timer stops (sent to review)
+    reviewStartedAt: null, // set when sent to review, cleared on completion/release
+    updates: [], // [{ts, note, status}] running log for the *current* task only
     helpFlag: false,
+    updatedAt: null,
   };
 }
 
-// Reconciles persisted station state with STATIONS_CONFIG: new stations in
-// the config appear as idle, stations removed from the config disappear -
-// so editing the config array is the entire "add/rename/remove a bay"
-// workflow, no migration step needed.
+// Reconciles persisted station state with STATIONS config: new stations
+// appear as idle, removed ones disappear - editing the config array is the
+// entire add/remove workflow. Name stays whatever an admin renamed it to
+// (falls back to config name only when nothing's persisted yet); zone
+// always follows the config, since that's the physical layout.
 function mergeWithConfig(stored) {
   const byId = new Map((stored || []).map((s) => [s.id, s]));
   return STATIONS.map((cfg) => {
     const existing = byId.get(cfg.id);
     if (!existing) return emptyStationState(cfg);
-    // Zone always follows the config (source of truth for layout/filtering).
-    // Name defaults from the config but stays whatever an admin has renamed
-    // it to via adminRenameStation - falling back to the config name only
-    // when nothing's been persisted yet.
     return { ...existing, name: existing.name || cfg.name, zone: cfg.zone };
   });
 }
@@ -52,33 +47,35 @@ export async function mutateStations(mutate) {
   return updateJSON(store, STATIONS_KEY, async (current) => mutate(mergeWithConfig(current)));
 }
 
-// Adds the derived `stale` flag (>4h since last update, still active) for
-// client display - never persisted, so it's always computed against "now".
-export function withStaleFlag(station) {
+// Adds derived, never-persisted display fields: the stale flag (active
+// >4h since last update) and live elapsed times for whichever timer is
+// currently running, computed against "now" on every read.
+export function withDerived(station) {
   const stale =
     station.status !== "idle" &&
     !!station.updatedAt &&
     Date.now() - new Date(station.updatedAt).getTime() > STALE_MS;
-  return { ...station, stale };
+  const taskElapsedMs =
+    station.taskDurationMs != null
+      ? station.taskDurationMs
+      : station.taskStartedAt
+        ? Date.now() - new Date(station.taskStartedAt).getTime()
+        : null;
+  const reviewElapsedMs = station.reviewStartedAt ? Date.now() - new Date(station.reviewStartedAt).getTime() : null;
+  return { ...station, stale, taskElapsedMs, reviewElapsedMs };
 }
 
-export async function loadTeams() {
+export async function loadHistory() {
   const store = stationBoardStore();
-  const stored = await store.get(TEAMS_KEY, { type: "json" });
-  if (stored && stored.length) return stored;
-  // First read ever: seed defaults with no passcode set (claiming is
-  // blocked until an admin sets one via adminSetTeamPasscode).
-  return DEFAULT_TEAMS.map((t) => ({ id: t.id, name: t.name, salt: null, hash: null }));
+  return (await store.get(HISTORY_KEY, { type: "json" })) || [];
 }
 
-export async function mutateTeams(mutate) {
+// Appends one completed-task record, capping the log at HISTORY_LIMIT most
+// recent entries so it never grows unbounded.
+export async function appendHistory(entry) {
   const store = stationBoardStore();
-  return updateJSON(store, TEAMS_KEY, async (current) => {
-    const base = current && current.length ? current : DEFAULT_TEAMS.map((t) => ({ id: t.id, name: t.name, salt: null, hash: null }));
-    return mutate(base);
+  return updateJSON(store, HISTORY_KEY, async (current) => {
+    const next = [entry, ...(current || [])];
+    return next.slice(0, HISTORY_LIMIT);
   });
-}
-
-export function publicTeam(t) {
-  return { id: t.id, name: t.name, hasPasscode: !!t.hash };
 }
